@@ -202,13 +202,10 @@ This project is licensed under the **MIT License** — see the [LICENSE](https:/
 
 -----
 
-## 👨‍💻 Author
+## Author
 
 **Ishan Saxena**
 📧 *[06ishansaxena@gmail.com](mailto:06ishansaxena@gmail.com)*
 🌐 *[linkedin](https://www.linkedin.com/in/ishan-saxena-62781428b/)*
 
 -----
-
-> *Built with chai using C++, Node.js, and JavaScript.*
-
