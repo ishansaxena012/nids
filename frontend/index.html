@@ -3,19 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NIDS Dashboard — Professional</title>
+  <title>SentinelWatch</title>
 
-  <!-- Link to the stylesheet you asked for (I'll provide the CSS when you request it) -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Favicons or small inline styles for immediate polish can be added later -->
 </head>
 <body>
-  <!-- ===== Header ===== -->
   <header class="header" role="banner">
     <div class="header-inner">
       <div class="brand">
-        <!-- small inline SVG logo -->
         <svg width="36" height="36" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path fill="currentColor" d="M3 3h18v18H3z" opacity="0.08"></path>
           <path fill="currentColor" d="M6 7h12v2H6zM6 11h8v2H6zM6 15h12v2H6z"></path>
@@ -43,7 +39,6 @@
     </div>
   </header>
 
-  <!-- ===== Main ===== -->
   <main id="main" role="main" class="main-wrap">
     <!-- Controls row -->
     <section class="controls-section" aria-label="Controls">
@@ -65,7 +60,6 @@
           <label for="rule-filter" class="visually-hidden">Rule</label>
           <select id="rule-filter" aria-label="Filter by rule">
             <option value="">All rules</option>
-            <!-- JS will populate rule list -->
           </select>
 
           <button id="clear-filters" class="btn" type="button">Clear</button>
@@ -77,10 +71,8 @@
       </div>
     </section>
 
-    <!-- Grid: left (alerts) and right (side panel: rules, notifications, audit) -->
     <div id="container" class="grid" role="region" aria-label="Main dashboard container">
 
-      <!-- ===== Alerts Section (main) ===== -->
       <section id="alerts-section" aria-labelledby="alerts-heading" class="card">
         <div class="card-header">
           <h2 id="alerts-heading">Alerts</h2>
@@ -91,7 +83,6 @@
           </div>
         </div>
 
-        <!-- table-wrapper provides both horizontal and vertical scroll; JS populates tbody -->
         <div class="table-wrapper" id="alerts-table-wrapper" style="max-height:480px; overflow:auto;" role="region" aria-label="Alerts table">
           <table id="alerts-table" class="data-table table-stack-on-small" aria-describedby="alerts-help">
             <caption id="alerts-help" class="visually-hidden">List of alerts with source, destination, protocol, severity and description</caption>
@@ -108,15 +99,12 @@
               </tr>
             </thead>
             <tbody aria-live="polite" id="alerts-tbody">
-              <!-- Rows inserted by script.js -->
             </tbody>
           </table>
         </div>
 
-        <!-- pagination and table utilities -->
         <div class="table-footer">
           <div class="pagination" id="pagination" role="navigation" aria-label="Alerts pagination">
-            <!-- JS will render pages and page-size control -->
           </div>
           <div class="table-legend small muted">
             <span class="legend-item"><span class="pill severity high"></span> High</span>
@@ -126,7 +114,6 @@
         </div>
       </section>
 
-      <!-- ===== Sidebar: Rules / Notifications / Audit ===== -->
       <aside class="sidebar card" aria-labelledby="rules-heading">
         <div class="card-header">
           <h2 id="rules-heading">Rules</h2>
@@ -148,25 +135,21 @@
               </tr>
             </thead>
             <tbody id="rules-tbody">
-              <!-- JS will populate rules -->
             </tbody>
           </table>
         </div>
 
         <h3 class="sidebar-heading">Notifications</h3>
         <div id="notifications" class="list-panel" role="status" aria-live="polite" style="max-height:180px; overflow:auto; padding-right:6px;">
-          <!-- JS will append notification items -->
         </div>
 
         <h3 class="sidebar-heading">Audit Logs</h3>
         <div id="audit-logs" class="list-panel" role="log" aria-live="polite" style="max-height:180px; overflow:auto; padding-right:6px;">
-          <!-- JS will append audit entries -->
         </div>
       </aside>
     </div>
   </main>
 
-  <!-- ===== Footer ===== -->
   <footer role="contentinfo">
     <div class="footer-inner small muted">
       <span>© <span id="year"></span> Ishan Saxena</span>
@@ -177,7 +160,6 @@
     </div>
   </footer>
 
-  <!-- ===== Templates & Modals (hidden; shown via JS) ===== -->
   <!-- Alert details modal -->
   <div id="modal-backdrop" class="modal-backdrop" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="modal" role="document" aria-labelledby="modal-title">
@@ -186,7 +168,6 @@
         <button class="modal-close" id="modal-close" aria-label="Close dialog">&times;</button>
       </header>
       <div class="modal-body" id="modal-body">
-        <!-- JS will fill alert details (full description, raw payload, suggested actions) -->
       </div>
       <footer class="modal-footer">
         <button id="modal-ack" class="btn" type="button">Acknowledge</button>

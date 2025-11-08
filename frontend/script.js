@@ -1,12 +1,6 @@
-// script.js — Professional NIDS Dashboard behavior
-// Replace API_BASE with your real API; this file expects the HTML you provided.
-
 const API_BASE = "http://localhost:3000";
-const REFRESH_INTERVAL_MS = 10000; // 10s refresh
+const REFRESH_INTERVAL_MS = 10000; 
 
-/* ---------------------------
-   Utility helpers
-   --------------------------- */
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 
@@ -30,11 +24,6 @@ async function fetchJSON(url, opts = {}) {
   }
 }
 
-/* ---------------------------
-   Severity mapping for CSS
-   --------------------------- */
-/* We add both 'severity' and the level class (high, medium, low)
-   so it matches selectors like ".severity.high" in style.css */
 function severityClassTokens(sev) {
   if (!sev) return ['severity', 'unknown'];
   const s = String(sev).toLowerCase();
@@ -44,11 +33,8 @@ function severityClassTokens(sev) {
   return ['severity', 'unknown'];
 }
 
-/* ---------------------------
-   DOM: references
-   --------------------------- */
-const alertsTbody = $('#alerts-tbody') || $('#alerts-table tbody'); // fallback
-const rulesTbody = $('#rules-tbody') || $('#rules-table tbody'); // fallback
+const alertsTbody = $('#alerts-tbody') || $('#alerts-table tbody'); 
+const rulesTbody = $('#rules-tbody') || $('#rules-table tbody');
 const notificationsEl = $('#notifications');
 const auditEl = $('#audit-logs');
 const lastUpdateTimeEl = $('#last-update-time');
@@ -62,14 +48,11 @@ const severityFilter = $('#severity-filter');
 const ruleFilter = $('#rule-filter');
 const resultCountEl = $('#result-count');
 
-let currentAlerts = [];   // cached alerts (filtered view created from this)
-let currentRules = [];    // cached rules
+let currentAlerts = [];   
+let currentRules = [];   
 
-/* ---------------------------
-   Render helpers
-   --------------------------- */
+
 function makeAlertRow(alert) {
-  // sanitize text
   const id = escapeHtml(alert.id ?? '');
   const src = escapeHtml(alert.src_ip ?? alert.src ?? '');
   const dst = escapeHtml(alert.dst_ip ?? alert.dst ?? '');
@@ -104,7 +87,6 @@ function applyTruncationTitles(container) {
   requestAnimationFrame(() => {
     const cells = container.querySelectorAll('td');
     cells.forEach(td => {
-      // Only set title for non-empty text nodes
       const txt = td.textContent?.trim() ?? '';
       if (!txt) { td.removeAttribute('title'); return; }
 
@@ -118,9 +100,9 @@ function applyTruncationTitles(container) {
   });
 }
 
-/* ---------------------------
+/* 
    Data loaders
-   --------------------------- */
+*/
 async function loadAlerts() {
   const data = await fetchJSON(`${API_BASE}/api/alerts`);
   if (!Array.isArray(data)) {
@@ -242,9 +224,9 @@ async function loadAudit() {
   applyTruncationTitles(auditEl);
 }
 
-/* ---------------------------
+/* 
    Controls & interactions
-   --------------------------- */
+ */
 function updateResultCount() {
   if (!resultCountEl) return;
   const visibleCount = currentAlerts.filter(matchesFilters).length;
@@ -278,10 +260,8 @@ async function bulkAcknowledgeSelected() {
     return;
   }
 
-  // optimistic UI: mark as acknowledged in audit log / notifications
   appendAudit(`Bulk acknowledge: ${selected.join(',')}`);
 
-  // try to POST to API; if fails, fall back to local
   try {
     const res = await fetch(`${API_BASE}/api/alerts/ack`, {
       method: 'POST',
@@ -292,12 +272,10 @@ async function bulkAcknowledgeSelected() {
     const json = await res.json();
     console.info('Bulk ack result:', json);
     appendNotification(`Acknowledged ${selected.length} alerts`);
-    // reload alerts to reflect backend state
     await loadAlerts();
   } catch (err) {
     console.warn('bulk ack failed, falling back to local update', err);
     appendNotification(`(Local) acknowledged ${selected.length} alerts`);
-    // Optionally remove or visually mark rows as acked
     selected.forEach(id => {
       const tr = alertsTbody.querySelector(`tr[data-alert-id="${id}"]`);
       if (tr) tr.style.opacity = '0.6';
@@ -305,7 +283,6 @@ async function bulkAcknowledgeSelected() {
   }
 }
 
-/* Export selected (or all visible) to CSV */
 function exportSelectedCSV() {
   if (!alertsTbody) return;
   const selectedRows = Array.from(alertsTbody.querySelectorAll('.row-select:checked'))
@@ -313,7 +290,6 @@ function exportSelectedCSV() {
   const rows = (selectedRows.length ? selectedRows : Array.from(alertsTbody.querySelectorAll('tr')))
     .map(tr => {
       const id = tr.querySelector('.col-id:nth-of-type(2)')?.textContent?.trim() ?? tr.dataset.alertId ?? '';
-      // If structure varies, fallback to dataset
       const src = tr.querySelector('.col-src')?.textContent?.trim() ?? '';
       const dst = tr.querySelector('.col-dst')?.textContent?.trim() ?? '';
       const proto = tr.querySelector('.col-proto')?.textContent?.trim() ?? '';
@@ -339,7 +315,6 @@ function exportSelectedCSV() {
   appendNotification(`Exported ${rows.length} alerts`);
 }
 
-/* Copy-to-clipboard helper for IP buttons */
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -350,7 +325,6 @@ async function copyToClipboard(text) {
   }
 }
 
-/* Append notification & audit helpers */
 function appendNotification(msg) {
   if (!notificationsEl) return;
   const el = document.createElement('div');
@@ -369,9 +343,9 @@ function appendAudit(msg) {
   applyTruncationTitles(auditEl);
 }
 
-/* ---------------------------
+/* 
    Event delegation for table actions
-   --------------------------- */
+*/
 function onTableClicked(e) {
   const viewBtn = e.target.closest('.view-btn');
   const ackBtn = e.target.closest('.ack-btn');
@@ -452,9 +426,9 @@ function showAlertModal(alertObj) {
   ackBtn?.addEventListener('click', onAck);
 }
 
-/* ---------------------------
+/* 
    Wiring up DOM events
-   --------------------------- */
+*/
 function wireUp() {
   // Delegated clicks on alerts table wrapper
   const alertsWrapper = $('#alerts-table-wrapper') || $('#alerts-table').parentElement;
@@ -494,15 +468,12 @@ function wireUp() {
   // handled already by onTableClicked via alertsWrapper click listener
 }
 
-/* Simple debounce for inputs */
 function debounce(fn, wait=150){
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), wait); };
 }
 
-/* ---------------------------
-   Main loader
-   --------------------------- */
+
 async function loadAll() {
   try {
     // Fetch in parallel
@@ -521,6 +492,5 @@ async function loadAll() {
 document.addEventListener('DOMContentLoaded', () => {
   wireUp();
   loadAll();
-  // refresh periodically
   setInterval(loadAll, REFRESH_INTERVAL_MS);
 });

@@ -4,32 +4,30 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import db from "./db.js";
 import { logger } from "./utils.js";
-import { spawn } from "child_process"; // This import is correct
+import { spawn } from "child_process"; 
 
 const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: "1mb" }));
 
-// --- Health check
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-// =================================================================
-// 1. NEW REUSABLE ALERT FUNCTION
-// =================================================================
+// ALERT FUNCTION
 /**
  * Ingests an alert into the database and enqueues notifications.
  * @param {object} alert - The alert object.
  * @returns {number} The ID of the inserted alert.
  * @throws {Error} if insertion fails.
  */
+
 function ingestAlert(alert) {
-  // 1. Validation
+  // Validation
   if (!alert.src_ip || !alert.dst_ip) {
     throw new Error("src_ip and dst_ip are required");
   }
 
-  // 2. Database Insert
+  // Database Insert
   const stmt = db.prepare(
     `INSERT INTO alerts (ts, src_ip, dst_ip, proto, rule, rule_id, severity, desc, payload_ref)
      VALUES (COALESCE(@ts, CURRENT_TIMESTAMP), @src_ip, @dst_ip, @proto, @rule, @rule_id, @severity, @desc, @payload_ref)`
@@ -56,7 +54,7 @@ function ingestAlert(alert) {
     severity: alert.severity || "medium",
   });
 
-  // 3. Notification Logic
+  // Notification Logic
   const sev = (alert.severity || "medium").toLowerCase();
   if (sev === "high" || sev === "critical") {
     const payload = {
@@ -77,9 +75,7 @@ function ingestAlert(alert) {
   return insertedId;
 }
 
-// =================================================================
-// 2. UPDATED ALERTS ENDPOINTS
-// =================================================================
+// ALERTS ENDPOINTS
 app.get("/api/alerts", (req, res) => {
   const rows = db
     .prepare("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 200")
@@ -87,17 +83,15 @@ app.get("/api/alerts", (req, res) => {
   res.json(rows);
 });
 
-// This route now uses the new ingestAlert function
+//  route uses the new ingestAlert function
 app.post("/api/alerts", (req, res) => {
   try {
     const insertedId = ingestAlert(req.body);
     return res.status(201).json({ status: "ok", id: insertedId });
   } catch (err) {
-    // Handle validation errors
     if (err.message.includes("required")) {
       return res.status(400).json({ error: err.message });
     }
-    // Handle server errors
     logger.error({ event: "alert_ingest_error", err: err.message });
     return res.status(500).json({ error: "internal_error" });
   }
@@ -113,13 +107,9 @@ app.get("/api/notifications/pending", (req, res) => {
   res.json(rows);
 });
 
-// ----------------- RULES + AUDIT ROUTES -----------------
-// (All your existing rules and audit routes are fine)
-// ----------------- ... (code omitted for brevity) ... -----------------
+//  RULES + AUDIT ROUTES 
 
-// Utility: compute simple diff between two objects
 function computeDiff(oldObj = {}, newObj = {}) {
-  // ... (your existing function)
   const diffs = [];
   const keys = new Set([
     ...Object.keys(oldObj || {}),
@@ -130,7 +120,6 @@ function computeDiff(oldObj = {}, newObj = {}) {
       oldObj && Object.prototype.hasOwnProperty.call(oldObj, k) ? oldObj[k] : null;
     const b =
       newObj && Object.prototype.hasOwnProperty.call(newObj, k) ? newObj[k] : null;
-    // treat undefined and null as equivalent for display
     const aStr = a === undefined ? null : a;
     const bStr = b === undefined ? null : b;
     if (String(aStr) !== String(bStr)) {
@@ -302,35 +291,24 @@ app.get("/api/rules/:id/audit", (req, res) => {
   res.json(rows);
 });
 
-// ----------------- end RULES + AUDIT ROUTES -----------------
+//  end RULES + AUDIT ROUTES 
+// SENSOR LAUNCHER
+//  Launches the C++ NIDS sensor as a child process
 
-// =================================================================
-// 3. NEW SENSOR LAUNCHER
-// =================================================================
-/**
- * Launches the C++ NIDS sensor as a child process
- */
 function launchNIDSSensor() {
-  // !! IMPORTANT !!
-  // Adjust this path to point to your *compiled* C++ executable
-  // This path is relative to the `backend` folder where this script runs
   const sensorPath = "../sensor/build/nids_sensor";
-  // On Windows, it might be: "../sensor/build/nids_sensor.exe"
 
   logger.info({ event: "sensor_spawning", path: sensorPath });
   
-  // spawn(sensorPath, [/* any arguments for your C++ app go here */]);
   const nidsProcess = spawn(sensorPath, ['5']);
-  // Listen for data (JSON alerts) from the C++ program's stdout
   nidsProcess.stdout.on("data", (data) => {
     const output = data.toString();
     
-    // Process each line separately, in case multiple alerts arrive at once
     output.split('\n').filter(Boolean).forEach(line => {
       logger.info({ event: "sensor_data", data: line });
       try {
         const alert = JSON.parse(line);
-        ingestAlert(alert); // <-- Use your reusable function
+        ingestAlert(alert); 
       } catch (err) {
         logger.error({ event: "sensor_data_parse_error", data: line, error: err.message });
       }
@@ -342,10 +320,8 @@ function launchNIDSSensor() {
     logger.error({ event: "sensor_error", error: data.toString() });
   });
 
-  // Log when the process exits and optionally restart it
   nidsProcess.on("close", (code) => {
     logger.warn({ event: "sensor_exited", code });
-    // Optional: Auto-restart the sensor after a delay
     // setTimeout(launchNIDSSensor, 5000); 
   });
   
@@ -354,13 +330,11 @@ function launchNIDSSensor() {
   });
 }
 
-// =================================================================
-// 4. UPDATED SERVER START
-// =================================================================
+// UPDATED SERVER START
 app.listen(PORT, () => {
   logger.info({ event: "server_start", port: PORT });
   console.log(`✅ Server running at http://localhost:${PORT}`);
   
-  // This line starts your C++ sensor
+  // starts your C++ sensor
   launchNIDSSensor();
 });
