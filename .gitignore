@@ -1,0 +1,38 @@
+# --- General ---
+# Operating System files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+
+# --- Editor ---
+# VS Code
+.vscode/
+
+# --- Backend (Node.js) ---
+# Dependencies
+backend/node_modules/
+
+# Local Database
+# This ensures your private database file is not committed
+backend/data/
+backend/src/data/
+
+# Environment Variables
+# NEVER commit .env files
+backend/.env
+.env
+
+# --- Sensor (C++) ---
+# Build artifacts
+sensor/build/
+
+# Compiled executables
+*.exe
+
+# Object files and other build junk
+*.o
+*.obj
+*.ilk
+*.pdb
+

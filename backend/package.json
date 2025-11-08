@@ -1,0 +1,20 @@
+{
+  "name": "nids-backend",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node src/index.js",
+    "worker": "node src/worker_emailjs.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "uuid": "^9.0.0",
+    "winston": "^3.9.0"
+  }
+}
