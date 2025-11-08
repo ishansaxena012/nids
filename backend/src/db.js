@@ -1,4 +1,3 @@
-// backend/src/db.js
 import 'dotenv/config';
 import path from 'path';
 import Database from 'better-sqlite3';
@@ -11,8 +10,8 @@ if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 // Open DB with sensible options
 // const db = new Database(dbPath, { verbose: console.log });
 const db = new Database(dbPath);
-db.pragma('journal_mode = WAL'); // better concurrency
-db.pragma('busy_timeout = 5000'); // wait if locked
+db.pragma('journal_mode = WAL'); 
+db.pragma('busy_timeout = 5000'); 
 
 db.exec(`
 PRAGMA foreign_keys = ON;
@@ -95,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_rules_updated_at ON rules(updated_at DESC);
 `);
 
-// Optional: seed an admin user if env vars provided
+// seed an admin user if env vars provided
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 if (ADMIN_USERNAME && ADMIN_EMAIL) {
