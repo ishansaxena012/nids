@@ -5,6 +5,9 @@
 ##  Overview
 
 This project uses a **hybrid architecture** that integrates a **high-performance C++ packet sniffing sensor** with a **modern Node.js backend** and a **live-updating web dashboard** for real-time threat monitoring.
+<img src="https://github.com/user-attachments/assets/28ca64f5-e5c9-4afa-aa4e-f4ba3d9187e3"
+     width="850">
+
 
 | Layer | Technologies |
 | :--- | :--- |
@@ -129,4 +132,5 @@ scripts/start.bat
 
 **Ishan Saxena**
 📭 *[06ishansaxena@gmail.com](mailto:06ishansaxena@gmail.com)*
+
 📝 *[linkedin](https://www.linkedin.com/in/ishan-saxena-62781428b/)*
