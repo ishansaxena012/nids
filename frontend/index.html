@@ -6,7 +6,6 @@
   <title>SentinelWatch</title>
 
   <link rel="stylesheet" href="style.css" />
-
 </head>
 <body>
   <header class="header" role="banner">
@@ -23,17 +22,20 @@
       </div>
 
       <div class="header-actions">
-        <div class="status small" aria-live="polite" role="status" id="last-update">Last update: <time id="last-update-time">—</time></div>
+        <div class="status small" aria-live="polite" role="status" id="last-update">
+          Last update: <time id="last-update-time">—</time>
+        </div>
 
         <div class="control-row">
           <label class="live-toggle" for="live-toggle">
-            <input id="live-toggle" type="checkbox" aria-checked="false" />
-            <span class="live-label">Live</span>
+            <!-- <input id="live-toggle" type="checkbox" aria-checked="false" /> -->
+            <span>•</span>
+            <span class="live-label">LIVE</span>
           </label>
 
-          <button id="import-btn" class="btn small" type="button" title="Import alerts or rules" aria-label="Import rules or alerts">Import</button>
-          <button id="export-btn" class="btn small" type="button" title="Export current view" aria-label="Export CSV">Export</button>
-          <button id="settings-btn" class="btn small" type="button" title="Settings" aria-label="Settings">Settings</button>
+          <!-- <button id="import-btn" class="btn small" type="button" title="Import alerts or rules" aria-label="Import rules or alerts">Import</button> -->
+          <!-- <button id="export-btn" class="btn small" type="button" title="Export current view" aria-label="Export CSV">Export</button> -->
+          <!-- <button id="settings-btn" class="btn small" type="button" title="Settings" aria-label="Settings">Settings</button> -->
         </div>
       </div>
     </div>
@@ -45,13 +47,19 @@
       <div class="controls-inner">
         <div class="search-wrap">
           <label for="search" class="visually-hidden">Search alerts</label>
-          <input id="search" type="search" placeholder="Search IP, description, rule..." aria-label="Search alerts" />
+          <input
+            id="search"
+            type="search"
+            placeholder="Search IP, description, host..."
+            aria-label="Search alerts by IP, description, or host"
+          />
         </div>
 
         <div class="filters-wrap">
           <label for="severity-filter" class="visually-hidden">Severity</label>
           <select id="severity-filter" aria-label="Filter by severity">
             <option value="">All severities</option>
+            <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Med</option>
             <option value="low">Low</option>
@@ -62,7 +70,7 @@
             <option value="">All rules</option>
           </select>
 
-          <button id="clear-filters" class="btn" type="button">Clear</button>
+          <!-- <button id="clear-filters" class="btn" type="button">Clear</button> -->
         </div>
 
         <div class="meta-actions">
@@ -83,18 +91,28 @@
           </div>
         </div>
 
-        <div class="table-wrapper" id="alerts-table-wrapper" style="max-height:480px; overflow:auto;" role="region" aria-label="Alerts table">
+        <div
+          class="table-wrapper"
+          id="alerts-table-wrapper"
+          style="max-height:480px; overflow:auto;"
+          role="region"
+          aria-label="Alerts table"
+        >
           <table id="alerts-table" class="data-table table-stack-on-small" aria-describedby="alerts-help">
-            <caption id="alerts-help" class="visually-hidden">List of alerts with source, destination, protocol, severity and description</caption>
+            <caption id="alerts-help" class="visually-hidden">
+              List of alerts with source, destination, protocol, severity, description and host (site)
+            </caption>
             <thead>
               <tr>
-                <th scope="col" class="col-id"><input type="checkbox" id="select-all" aria-label="Select all alerts" /></th>
+                <th scope="col" class="col-id">
+                  <input type="checkbox" id="select-all" aria-label="Select all alerts" />
+                </th>
                 <th scope="col" class="col-id">ID</th>
                 <th scope="col" class="col-src">Source</th>
                 <th scope="col" class="col-dst">Destination</th>
                 <th scope="col" class="col-proto">Proto</th>
                 <th scope="col" class="col-sev">Severity</th>
-                <th scope="col" class="col-desc wrap">Description</th>
+                <th scope="col" class="col-desc wrap">Description / Host</th>
                 <th scope="col" class="col-actions">Actions</th>
               </tr>
             </thead>
@@ -118,12 +136,18 @@
         <div class="card-header">
           <h2 id="rules-heading">Rules</h2>
           <div class="card-actions">
-            <button id="new-rule" class="btn" type="button" aria-label="Create new rule">New</button>
-            <button id="import-rules" class="btn" type="button" aria-label="Import rules">Import</button>
+            <!-- <button id="new-rule" class="btn" type="button" aria-label="Create new rule">New</button>
+            <button id="import-rules" class="btn" type="button" aria-label="Import rules">Import</button> -->
           </div>
         </div>
 
-        <div class="table-wrapper" id="rules-table-wrapper" style="max-height:240px; overflow:auto;" role="region" aria-label="Rules table">
+        <div
+          class="table-wrapper"
+          id="rules-table-wrapper"
+          style="max-height:240px; overflow:auto;"
+          role="region"
+          aria-label="Rules table"
+        >
           <table id="rules-table" class="data-table" aria-describedby="rules-help">
             <caption id="rules-help" class="visually-hidden">List of detection rules</caption>
             <thead>
@@ -140,11 +164,23 @@
         </div>
 
         <h3 class="sidebar-heading">Notifications</h3>
-        <div id="notifications" class="list-panel" role="status" aria-live="polite" style="max-height:180px; overflow:auto; padding-right:6px;">
+        <div
+          id="notifications"
+          class="list-panel"
+          role="status"
+          aria-live="polite"
+          style="max-height:180px; overflow:auto; padding-right:6px;"
+        >
         </div>
 
         <h3 class="sidebar-heading">Audit Logs</h3>
-        <div id="audit-logs" class="list-panel" role="log" aria-live="polite" style="max-height:180px; overflow:auto; padding-right:6px;">
+        <div
+          id="audit-logs"
+          class="list-panel"
+          role="log"
+          aria-live="polite"
+          style="max-height:180px; overflow:auto; padding-right:6px;"
+        >
         </div>
       </aside>
     </div>
@@ -154,14 +190,24 @@
     <div class="footer-inner small muted">
       <span>© <span id="year"></span> Ishan Saxena</span>
       <span>•</span>
-      <a href="https://docs.google.com/document/d/1pnDwyei8hbpy6tuHpCorJFoQEilcBY0Ak9vf2RXu2NA/edit?usp=sharing" id="docs-link" class="muted">Docs</a>
-      <span>•</span>
-      <a href="#" id="support-link" class="muted">Support</a>
+      <a
+        href="https://docs.google.com/document/d/1pnDwyei8hbpy6tuHpCorJFoQEilcBY0Ak9vf2RXu2NA/edit?usp=sharing"
+        id="docs-link"
+        class="muted"
+      >Docs</a>
+      <!-- <span>•</span> -->
+      <!-- <a href="#" id="support-link" class="muted">Support</a> -->
     </div>
   </footer>
 
   <!-- Alert details modal -->
-  <div id="modal-backdrop" class="modal-backdrop" aria-hidden="true" role="dialog" aria-modal="true">
+  <div
+    id="modal-backdrop"
+    class="modal-backdrop"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+  >
     <div class="modal" role="document" aria-labelledby="modal-title">
       <header class="modal-header">
         <h3 id="modal-title">Alert details</h3>
@@ -177,14 +223,22 @@
   </div>
 
   <!-- Rule edit modal -->
-  <div id="rule-modal-backdrop" class="modal-backdrop" aria-hidden="true" role="dialog" aria-modal="true">
+  <div
+    id="rule-modal-backdrop"
+    class="modal-backdrop"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+  >
     <div class="modal" role="document" aria-labelledby="rule-modal-title">
       <header class="modal-header">
         <h3 id="rule-modal-title">Edit Rule</h3>
         <button class="modal-close" id="rule-modal-close" aria-label="Close dialog">&times;</button>
       </header>
       <form id="rule-form" class="modal-body" aria-describedby="rule-form-desc">
-        <div id="rule-form-desc" class="visually-hidden">Edit rule name, pattern and enabled state</div>
+        <div id="rule-form-desc" class="visually-hidden">
+          Edit rule name, pattern and enabled state
+        </div>
         <label for="rule-id" class="visually-hidden">Rule ID</label>
         <input id="rule-id" name="id" type="text" readonly class="form-field" />
 
@@ -209,7 +263,6 @@
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
   </script>
-
 
   <script src="script.js" defer></script>
 </body>

@@ -1,100 +1,235 @@
-// packet_sniffer.cpp
 #include "packet_sniffer.h"
+#define _WIN32_WINNT 0x0600
 
-#include "packet_sniffer.h"
 #include <pcap.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
+#include <winsock2.h>
+#include <ws2tcpip.h>   // getnameinfo, NI_* macros, InetPton/InetNtop on Windows
+#include <chrono>
+#include <cstdint>
+#include <cstring>
 #include <ctime>
-#include <vector>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <chrono>
-#include <cstring>
-#include <winsock2.h>
-using namespace std;
+#include <iomanip>
+// MUTEX INCLUDE REMOVED
 
-// Define TCP flag macros if platform headers didn't
 #ifndef TH_SYN
-#define TH_FIN 0x01
-#define TH_SYN 0x02
-#define TH_RST 0x04
+#define TH_FIN  0x01
+#define TH_SYN  0x02
+#define TH_RST  0x04
 #define TH_PUSH 0x08
-#define TH_ACK 0x10
-#define TH_URG 0x20
+#define TH_ACK  0x10
+#define TH_URG  0x20
 #endif
 
-// Helper: format current time
-static string get_current_time_str()
-{
-    time_t raw = time(nullptr);
-    char buf[32];
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&raw));
-    return string(buf);
-}
+#pragma comment(lib, "Ws2_32.lib") // Ensure Ws2_32 is linked
 
-// Convert network-order uint32_t to dotted IP string
-static string ip_to_string(uint32_t net_ip)
-{
-    struct in_addr addr;
-    addr.s_addr = net_ip; // network order as expected by inet_ntoa
-    return string(inet_ntoa(addr));
+extern "C" {
+    __declspec(dllimport) int __stdcall inet_pton(int af, const char* src, void* dst);
+    __declspec(dllimport) const char* __stdcall inet_ntop(int af, const void* src, char* dst, socklen_t size);
 }
-
-// Logging helper (append)
-static void log_alert_to_file(const string &json)
+namespace
 {
-    ofstream ofs("intrusion_alerts.log", ios::app);
-    if (ofs)
+    using Clock     = std::chrono::steady_clock;
+    using TimePoint = Clock::time_point;
+
+    // Simple TCP SYN tracking record
+    struct TCPScanRecord
     {
-        ofs << json;
-        ofs.close();
+        int       syns      = 0;
+        TimePoint first_seen = {};
+    };
+
+    // Global trackers (NO MUTEX GUARD)
+    static std::unordered_map<std::string, std::pair<std::string, TimePoint>> g_dns_cache;
+    static constexpr auto DNS_CACHE_TTL = std::chrono::minutes(10);
+    static std::unordered_map<std::string, TCPScanRecord> scan_tracker;
+    // Mutexes removed
+
+    // Whitelist of common server ports
+    const std::unordered_set<std::uint16_t> SAFE_SERVER_PORTS{
+        80, 443, 53, 123, 853, 5353, 4500
+    };
+
+    // // Compat wrappers for thread-safe functions (still needed)
+    // static int inet_pton_compat(int af, const char* src, void* dst)
+    // {
+    //     // MinGW/GCC should map this to the correct underlying function
+    //     return inet_pton(af, src, dst);
+    // }
+
+    // static const char* inet_ntop_compat(int af, const void* src, char* dst, socklen_t size)
+    // {
+    //     // MinGW/GCC should map this to the correct underlying function
+    //     return inet_ntop(af, src, dst, size);
+    // }
+
+    // Helper: format current time as string
+    std::string get_current_time_str()
+    {
+        std::time_t raw = std::time(nullptr);
+        char        buf[32]{};
+        if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&raw)) == 0)
+        {
+            return "1970-01-01 00:00:00";
+        }
+        return std::string{buf};
     }
-}
 
-// Simple TCP SYN tracking record
-struct TCPScanRecord
+    // Convert network-order uint32_t to dotted IP string (Using safer inet_ntop_compat)
+    std::string ip_to_string(std::uint32_t net_ip)
+    {
+        in_addr addr{};
+        addr.s_addr = net_ip;
+        char buf[INET_ADDRSTRLEN] = {0};
+        if (inet_ntop(AF_INET, &addr, buf, static_cast<socklen_t>(sizeof(buf))))
+        {
+            return std::string{buf};
+        }
+        // Fallback if inet_ntop fails
+        std::uint32_t host = ntohl(net_ip);
+        std::ostringstream ss;
+        ss << ((host >> 24) & 0xFF) << '.' << ((host >> 16) & 0xFF) << '.' << ((host >> 8) & 0xFF) << '.' << (host & 0xFF);
+        return ss.str();
+    }
+
+    // Helper: Check if an IPv4 address is in private ranges
+    bool is_private_ipv4(std::uint32_t net_ip)
+    {
+        std::uint32_t host_ip = ntohl(net_ip);
+        std::uint8_t  b0      = static_cast<std::uint8_t>((host_ip >> 24) & 0xFF);
+        std::uint8_t  b1      = static_cast<std::uint8_t>((host_ip >> 16) & 0xFF);
+
+        if (b0 == 10) return true;
+        if (b0 == 192 && b1 == 168) return true;
+        if (b0 == 172 && (b1 >= 16 && b1 <= 31)) return true;
+        return false;
+    }
+
+    // JSON-escape helper
+    static std::string json_escape(const std::string& s) {
+        std::string out; out.reserve(s.size());
+        for (unsigned char c : s) {
+            switch (c) {
+                case '\"': out += "\\\""; break;
+                case '\\': out += "\\\\"; break;
+                case '\n': out += "\\n"; break;
+                case '\r': out += "\\r"; break;
+                case '\t': out += "\\t"; break;
+                default:
+                    if (c < 0x20) {
+                        char buf[7];
+                        std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+                        out += buf;
+                    } else {
+                        out += static_cast<char>(c);
+                    }
+            }
+        }
+        return out;
+    }
+
+    // Helper: Reverse DNS lookup with thread-safe TTL cache (Mutexes removed from logic block)
+    static std::string resolve_host_for_ip(const std::string& ip)
+    {
+        if (ip.empty()) return std::string();
+
+        const auto now = Clock::now();
+
+        // NO MUTEX HERE: relies on single-threaded nature of pcap_loop
+        auto it = g_dns_cache.find(ip);
+        if (it != g_dns_cache.end())
+        {
+            if (now - it->second.second < DNS_CACHE_TTL)
+            {
+                return it->second.first; // cached name or numeric fallback
+            }
+        }
+
+        sockaddr_in sa{};
+        sa.sin_family = AF_INET;
+        if (inet_pton(AF_INET, ip.c_str(), &sa.sin_addr) != 1)
+        {
+            return std::string();
+        }
+
+        char hostbuf[NI_MAXHOST] = {0};
+        int res = getnameinfo(
+            reinterpret_cast<sockaddr*>(&sa),
+            static_cast<socklen_t>(sizeof(sa)),
+            hostbuf,
+            sizeof(hostbuf),
+            nullptr,
+            0,
+            0); // 0 instead of NI_NAMEREQD
+
+        std::string host_res;
+        if (res == 0)
+        {
+            host_res = hostbuf;
+        }
+        else
+        {
+            // fallback: numeric textual address
+            char numbuf[INET_ADDRSTRLEN] = {0};
+            if (inet_ntop(AF_INET, &sa.sin_addr, numbuf, static_cast<socklen_t>(sizeof(numbuf))))
+            {
+                host_res = numbuf;
+            }
+            else
+            {
+                host_res = ip;
+            }
+        }
+
+        // NO MUTEX HERE: relies on single-threaded nature of pcap_loop
+        g_dns_cache[ip] = std::make_pair(host_res, now);
+
+        return host_res;
+    }
+
+} // namespace
+
+
+
+// PacketSniffer Implementation
+PacketSniffer::PacketSniffer(int device_num)
+    : handle_(nullptr)
 {
-    int syns = 0;
-    chrono::steady_clock::time_point first_seen;
-};
+    // --- CRITICAL FIX: Initialize Winsock (WSAStartup) ---
+    // Required for getnameinfo, InetPton, and other socket API calls on Windows.
+    {
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+            std::cerr << "WSAStartup failed. DNS resolution may fail.\n";
+        }
+    }
 
-static unordered_map<string, TCPScanRecord> scan_tracker;
-
-// Whitelist of common server ports (do NOT include 22/3389 if you want those alerted)
-static const unordered_set<uint16_t> SAFE_SERVER_PORTS = {
-    80,   // HTTP
-    443,  // HTTPS
-    53,   // DNS
-    123,  // NTP
-    853,  // DNS over TLS
-    5353, // mDNS
-    4500  // IPsec NAT-T
-};
-
-// PacketSniffer methods
-
-PacketSniffer::PacketSniffer(int device_num) : handle(nullptr)
-{
     if (device_num <= 0)
         device_num = 1;
 
-    pcap_if_t *alldevs = nullptr;
+    char errbuf[PCAP_ERRBUF_SIZE];
+    std::memset(errbuf, 0, sizeof(errbuf));
+
+    pcap_if_t* alldevs = nullptr;
     if (pcap_findalldevs(&alldevs, errbuf) == -1)
     {
-        cerr << "Error finding devices: " << errbuf << endl;
-        exit(1);
-    }
-    if (!alldevs)
-    {
-        cerr << "No devices found." << endl;
-        exit(1);
+        std::cerr << "Error finding devices: " << errbuf << "\n";
+        return;
     }
 
-    // Choose 1-based device number: 1 => first device
-    pcap_if_t *dev = alldevs;
-    int idx = 1;
+    if (!alldevs)
+    {
+        std::cerr << "No devices found.\n";
+        return;
+    }
+
+    pcap_if_t* dev = alldevs;
+    int        idx = 1;
     while (dev && idx < device_num)
     {
         dev = dev->next;
@@ -103,266 +238,395 @@ PacketSniffer::PacketSniffer(int device_num) : handle(nullptr)
 
     if (!dev)
     {
-        cerr << "Error: Device number " << device_num << " not found." << endl;
-        cerr << "Available devices:" << endl;
+        std::cerr << "Error: Device number " << device_num << " not found.\n";
+        std::cerr << "Available devices:\n";
         int i = 1;
-        for (pcap_if_t *d = alldevs; d; d = d->next, ++i)
+        for (pcap_if_t* d = alldevs; d; d = d->next, ++i)
         {
-            cerr << "  " << i << ": " << (d->description ? d->description : d->name) << endl;
+            std::cerr << "   " << i << ": "
+                      << (d->description ? d->description : d->name) << "\n";
         }
         pcap_freealldevs(alldevs);
-        exit(1);
+        return;
     }
 
-    cerr << "---" << endl;
-    cerr << "Attempting to sniff on device " << device_num << ": " << (dev->description ? dev->description : dev->name) << endl;
-    cerr << "---" << endl;
+    std::cerr << "---\n";
+    std::cerr << "Attempting to sniff on device " << device_num << ": "
+              << (dev->description ? dev->description : dev->name) << "\n";
+    std::cerr << "---\n";
 
-    handle = pcap_open_live(dev->name, 65536, 1, 1000, errbuf);
+    handle_ = pcap_open_live(dev->name,
+                             65536,  // snaplen
+                             1,      // promiscuous
+                             1000,   // timeout ms
+                             errbuf);
+
     pcap_freealldevs(alldevs);
-    if (!handle)
+
+    if (!handle_)
     {
-        cerr << "Couldn't open device " << dev->name << ": " << errbuf << endl;
-        exit(1);
+        std::cerr << "Couldn't open device " << dev->name << ": " << errbuf << "\n";
+        return;
+    }
+
+    // Apply a BPF filter to reduce captured traffic (IP + TCP/ICMP only)
+    {
+        struct bpf_program fp;
+        if (pcap_compile(handle_, &fp, "ip and (tcp or icmp)", 1, PCAP_NETMASK_UNKNOWN) == 0)
+        {
+            if (pcap_setfilter(handle_, &fp) != 0)
+            {
+                std::cerr << "Warning: pcap_setfilter failed\n";
+            }
+            pcap_freecode(&fp);
+        }
+    }
+
+    // Open the persistent log stream once and enable immediate flush (unitbuf)
+    log_stream_.open("intrusion_alerts.log", std::ios::app);
+    if (!log_stream_.is_open())
+    {
+        std::cerr << "Warning: Could not open intrusion_alerts.log for writing.\n";
+    }
+    else
+    {
+        log_stream_.setf(std::ios::unitbuf); // flush after each write
     }
 }
 
 PacketSniffer::~PacketSniffer()
 {
-    if (handle)
+    if (handle_)
     {
-        pcap_close(handle);
+        pcap_close(handle_);
+        handle_ = nullptr;
     }
+    if (log_stream_.is_open())
+    {
+        log_stream_.close();
+    }
+    // --- CRITICAL FIX: Clean up Winsock ---
+    WSACleanup();
+    // ----------------------------------------
 }
 
 void PacketSniffer::start_sniffing()
 {
-    pcap_loop(handle, -1, packet_handler_callback, reinterpret_cast<u_char *>(this));
+    if (!handle_)
+    {
+        std::cerr << "pcap handle is null. Cannot start sniffing.\n";
+        return;
+    }
+
+    pcap_loop(handle_,
+              -1, // infinite loop
+              &PacketSniffer::packet_handler_callback,
+              reinterpret_cast<u_char*>(this));
 }
 
 // static callback required by libpcap
-void PacketSniffer::packet_handler_callback(u_char *user_data, const struct pcap_pkthdr *pkthdr, const u_char *packet_data)
+void PacketSniffer::packet_handler_callback(
+    u_char* user_data,
+    const pcap_pkthdr* pkthdr,
+    const u_char* packet_data)
 {
-    PacketSniffer *sniffer = reinterpret_cast<PacketSniffer *>(user_data);
-    if (sniffer && packet_data && pkthdr)
+    auto* sniffer = reinterpret_cast<PacketSniffer*>(user_data);
+    if (!sniffer || !pkthdr || !packet_data)
     {
-        sniffer->process_packet_with_len(packet_data, pkthdr->len);
-    }
-}
-
-// legacy compatibility (no-op)
-void PacketSniffer::process_packet(const u_char * /*packet_data*/)
-{
-    return;
-}
-
-// length-aware processing (safe parsing)
-void PacketSniffer::process_packet_with_len(const u_char *packet_data, bpf_u_int32 packet_len)
-{
-    if (!packet_data || packet_len < 14)
-        return; // must have ethernet header
-
-    const size_t ETH_HDR_LEN = 14;
-    const u_char *eth = packet_data;
-
-    // EtherType at offset 12-13
-    uint16_t eth_type_net = 0;
-    memcpy(&eth_type_net, eth + 12, sizeof(eth_type_net));
-    uint16_t eth_type = ntohs(eth_type_net);
-    const uint16_t ETH_P_IP = 0x0800;
-    if (eth_type != ETH_P_IP)
-        return; // not IPv4
-
-    // IP header starts at offset 14
-    if (packet_len < ETH_HDR_LEN + 20)
-        return; // minimal IPv4 header
-    const u_char *ip_ptr = packet_data + ETH_HDR_LEN;
-
-    uint8_t ver_ihl = ip_ptr[0];
-    uint8_t ip_ver = (ver_ihl >> 4) & 0x0F;
-    uint8_t ihl = ver_ihl & 0x0F;
-    if (ip_ver != 4 || ihl < 5)
         return;
+    }
 
-    size_t ip_header_len = static_cast<size_t>(ihl) * 4;
-    if (packet_len < ETH_HDR_LEN + ip_header_len)
-        return; // truncated IP header
+    // FIX: Call site now uses the correct 2-argument signature for the instance method
+    sniffer->process_packet_with_len(packet_data, pkthdr->len);
+}
 
-    // Protocol at offset 9
-    uint8_t proto = ip_ptr[9];
+// Legacy compatibility (no-op)
+void PacketSniffer::process_packet(const u_char* /*packet_data*/)
+{
+    // Intentionally left empty for backwards compatibility
+}
 
-    // Source/dest IP at offsets 12 and 16
-    uint32_t src_addr_net = 0, dst_addr_net = 0;
-    memcpy(&src_addr_net, ip_ptr + 12, 4);
-    memcpy(&dst_addr_net, ip_ptr + 16, 4);
-    string src_ip = ip_to_string(src_addr_net);
-    string dst_ip = ip_to_string(dst_addr_net);
-
-    auto emit_alert_json = [&](const string &proto_name, const string &severity, const string &description)
+// Length-aware processing (safe parsing)
+// FIX: Function definition is simplified back to 2 arguments to match the call above
+void PacketSniffer::process_packet_with_len(const u_char* packet_data,
+                                            bpf_u_int32   packet_len)
+{
+    if (!packet_data || packet_len < 14U)
     {
-        ostringstream ss;
-        ss << "{"
-           << "\"time\":\"" << get_current_time_str() << "\","
-           << "\"src_ip\":\"" << src_ip << "\","
-           << "\"dst_ip\":\"" << dst_ip << "\","
-           << "\"proto\":\"" << proto_name << "\","
-           << "\"severity\":\"" << severity << "\","
-           << "\"desc\":\"" << description << "\""
-           << "}\n";
-        cout << ss.str();
-        cout.flush();
-        log_alert_to_file(ss.str());
+        return;
+    }
+
+    constexpr std::uint16_t ETH_P_IP = 0x0800;
+
+    const u_char* eth = packet_data;
+
+    std::uint16_t eth_type_net = 0;
+    std::memcpy(&eth_type_net, eth + 12, sizeof(eth_type_net));
+    std::uint16_t eth_type = ntohs(eth_type_net);
+    std::size_t eth_hdr_len = 14U;
+
+    // Handle single 802.1Q VLAN tag (0x8100)
+    if (eth_type == 0x8100 && packet_len >= 18U)
+    {
+        std::memcpy(&eth_type_net, eth + 16, sizeof(eth_type_net));
+        eth_type = ntohs(eth_type_net);
+        eth_hdr_len = 18U;
+    }
+
+    if (eth_type != ETH_P_IP)
+    {
+        return;
+    }
+
+    if (packet_len < eth_hdr_len + 20U)
+    {
+        return;
+    }
+
+    const u_char* ip_ptr = packet_data + eth_hdr_len;
+
+    const std::uint8_t ver_ihl = ip_ptr[0];
+    const std::uint8_t ip_ver  = (ver_ihl >> 4) & 0x0F;
+    const std::uint8_t ihl     = ver_ihl & 0x0F;
+
+    if (ip_ver != 4 || ihl < 5)
+    {
+        return;
+    }
+
+    const std::size_t ip_header_len = static_cast<std::size_t>(ihl) * 4U;
+    if (packet_len < eth_hdr_len + ip_header_len)
+    {
+        return;
+    }
+
+    // Fragmentation: skip non-first fragments
+    std::uint16_t frag_off_net = 0;
+    std::memcpy(&frag_off_net, ip_ptr + 6, sizeof(frag_off_net));
+    std::uint16_t frag_off = ntohs(frag_off_net);
+    if ((frag_off & 0x1FFF) != 0)
+    {
+        return;
+    }
+
+    const std::uint8_t proto = ip_ptr[9];
+
+    std::uint32_t src_addr_net = 0;
+    std::uint32_t dst_addr_net = 0;
+
+    std::memcpy(&src_addr_net, ip_ptr + 12, sizeof(src_addr_net));
+    std::memcpy(&dst_addr_net, ip_ptr + 16, sizeof(dst_addr_net));
+
+    const std::string src_ip = ip_to_string(src_addr_net);
+    const std::string dst_ip = ip_to_string(dst_addr_net);
+
+    // Helper: pick IP to resolve (for host)
+    auto pick_remote_ip = [&]() -> std::string
+    {
+        bool src_private = is_private_ipv4(src_addr_net);
+        bool dst_private = is_private_ipv4(dst_addr_net);
+
+        if (!src_private && dst_private)
+            return src_ip;
+        if (!dst_private && src_private)
+            return dst_ip;
+
+        return std::string();
     };
 
-    //  ICMP handling (protocol 1)
+    // Helper: Emit alert as JSON, explicitly capturing 'this'
+    auto emit_alert_json =
+    [this, src_ip, dst_ip](const std::string& proto_name,
+        const std::string& severity,
+        const std::string& description,
+        const std::string& host)
+    {
+        std::ostringstream ss;
+        ss << '{'
+           << "\"time\":\""    << get_current_time_str() << "\","
+           << "\"src_ip\":\""  << json_escape(src_ip) << "\","
+           << "\"dst_ip\":\""  << json_escape(dst_ip) << "\","
+           << "\"proto\":\""   << json_escape(proto_name) << "\","
+           << "\"severity\":\""<< json_escape(severity) << "\","
+           << "\"desc\":\""    << json_escape(description) << "\"";
+
+        if (!host.empty())
+        {
+            ss << ",\"host\":\"" << json_escape(host) << "\"";
+        }
+        ss << "}\n";
+
+        const std::string json = ss.str();
+
+        std::cout << json;
+        std::cout.flush();
+
+        // Access member via 'this' pointer
+        if (this->log_stream_.is_open())
+        {
+            this->log_stream_ << json;
+        }
+    };
+
+    // -------------------------------------------------------------------------
+    // ICMP handling (protocol 1)
+    // -------------------------------------------------------------------------
     if (proto == 1)
     {
-        // Smarter ICMP: ignore local outgoing pings and detect flood
-        static unordered_map<string, int> icmp_count;
-        static chrono::steady_clock::time_point last_cleanup = chrono::steady_clock::now();
+        static std::unordered_map<std::string, int> icmp_count;
+        static TimePoint last_cleanup = Clock::now();
 
-        // cleanup every 5 seconds
-        auto now = chrono::steady_clock::now();
-        if (chrono::duration_cast<chrono::seconds>(now - last_cleanup).count() > 5)
+        const auto now = Clock::now();
+
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_cleanup).count() > 5)
         {
             icmp_count.clear();
             last_cleanup = now;
         }
 
-        // Determine if source IP is in private ranges (simple check)
-        bool src_is_private = false;
-        // check 10., 172.16-31., 192.168.
-        // We have net-order src_addr_net; convert to host-order for byte checks
-        uint32_t src_host = ntohl(src_addr_net);
-        uint8_t b0 = (src_host >> 24) & 0xFF;
-        uint8_t b1 = (src_host >> 16) & 0xFF;
-        if (b0 == 10)
-            src_is_private = true;
-        else if (b0 == 192 && b1 == 168)
-            src_is_private = true;
-        else if (b0 == 172 && (b1 >= 16 && b1 <= 31))
-            src_is_private = true;
+        const std::string key = src_ip + "->" + dst_ip;
+        ++icmp_count[key];
 
-        // If source is local/private, ignore (likely our own outgoing ping)
-        if (src_is_private)
+        if (icmp_count[key] > 3)
         {
-            return;
-        }
-
-        // track ICMP flows by src->dst
-        string key = src_ip + "->" + dst_ip;
-        icmp_count[key]++;
-
-        // threshold: more than 10 ICMP packets in cleanup window = flood
-        if (icmp_count[key] > 10)
-        {
-            emit_alert_json("ICMP", "medium", "High ICMP traffic detected (possible ping flood) from " + src_ip);
+            std::string host = resolve_host_for_ip(pick_remote_ip());
+            emit_alert_json(
+                "ICMP",
+                "medium",
+                "High ICMP traffic detected (possible ping flood) from " + src_ip,
+                host);
             icmp_count[key] = 0;
         }
         return;
     }
 
-    //  UDP handling (protocol 17)
+    // -------------------------------------------------------------------------
+    // UDP handling (protocol 17)
+    // -------------------------------------------------------------------------
     if (proto == 17)
     {
         return;
     }
 
-    //  TCP handling (protocol 6)
+    // -------------------------------------------------------------------------
+    // TCP handling (protocol 6)
+    // -------------------------------------------------------------------------
     if (proto == 6)
     {
-        size_t tcp_off = ETH_HDR_LEN + ip_header_len;
-        // require at least minimal TCP header (20 bytes)
-        if (packet_len < tcp_off + 20)
-            return;
+        const std::size_t tcp_off = eth_hdr_len + ip_header_len;
 
-        // read src/dst ports (network order)
-        uint16_t src_port_net = 0, dst_port_net = 0;
-        memcpy(&src_port_net, packet_data + tcp_off + 0, sizeof(uint16_t));
-        memcpy(&dst_port_net, packet_data + tcp_off + 2, sizeof(uint16_t));
-        uint16_t src_port = ntohs(src_port_net);
-        uint16_t dst_port = ntohs(dst_port_net);
-
-        // early whitelist: ignore common service ports to avoid false positives
-        static const unordered_set<uint16_t> SAFE_PORTS = {80, 443, 53, 123, 853, 5353, 4500};
-        if (SAFE_PORTS.count(dst_port))
+        if (packet_len < tcp_off + 20U)
         {
-            // If you prefer to record normal web traffic as low severity uncomment:
-            // emit_alert_json("TCP", "low", "Normal traffic on safe port " + to_string(dst_port));
             return;
         }
 
-        // read TCP data-offset and flags (offset 12 and 13 within TCP header)
-        uint8_t data_off_byte = packet_data[tcp_off + 12];
-        uint8_t tcp_flags = packet_data[tcp_off + 13];
-        uint8_t tcp_hdr_len = ((data_off_byte >> 4) & 0x0F) * 4;
-        if (tcp_hdr_len < 20 || packet_len < tcp_off + tcp_hdr_len)
-            return;
+        std::uint16_t src_port_net = 0;
+        std::uint16_t dst_port_net = 0;
 
-        // flags
-        bool is_syn = (tcp_flags & TH_SYN) != 0;
-        bool is_ack = (tcp_flags & TH_ACK) != 0;
-        bool is_rst = (tcp_flags & TH_RST) != 0;
-        bool is_fin = (tcp_flags & TH_FIN) != 0;
-        bool is_psh = (tcp_flags & TH_PUSH) != 0;
+        std::memcpy(&src_port_net, packet_data + tcp_off + 0, sizeof(src_port_net));
+        std::memcpy(&dst_port_net, packet_data + tcp_off + 2, sizeof(dst_port_net));
 
-        // explicit important ports
-        if (dst_port == 22)
+        const std::uint16_t src_port = ntohs(src_port_net);
+        const std::uint16_t dst_port = ntohs(dst_port_net);
+
+        const std::uint8_t data_off_byte = packet_data[tcp_off + 12];
+        const std::uint8_t tcp_flags     = packet_data[tcp_off + 13];
+        const std::uint8_t tcp_hdr_len   =
+            static_cast<std::uint8_t>((data_off_byte >> 4) & 0x0F) * 4U;
+
+        if (tcp_hdr_len < 20U || packet_len < tcp_off + tcp_hdr_len)
         {
-            emit_alert_json("TCP", "high", "Potential SSH connection detected to port 22");
-            return;
-        }
-        if (dst_port == 3389)
-        {
-            emit_alert_json("TCP", "high", "Potential RDP connection detected to port 3389");
             return;
         }
 
-        // Only consider "pure SYN" probes for scan detection
+        const bool is_syn = (tcp_flags & TH_SYN)  != 0;
+        const bool is_ack = (tcp_flags & TH_ACK)  != 0;
+        const bool is_rst = (tcp_flags & TH_RST)  != 0;
+        const bool is_fin = (tcp_flags & TH_FIN)  != 0;
+        const bool is_psh = (tcp_flags & TH_PUSH) != 0;
+
+        std::string host = resolve_host_for_ip(pick_remote_ip());
+
+        // --- SYN scan check runs FIRST (LOGIC FIX) ---
         if (is_syn && !is_ack && !is_rst && !is_fin && !is_psh)
         {
-            // sliding-window per src->dst key using chrono
-            string key = src_ip + "->" + dst_ip;
-            auto &rec = scan_tracker[key]; // TCPScanRecord defined previously with 'syns' and 'first_seen'
-            auto now = chrono::steady_clock::now();
+            const std::string key = src_ip + "->" + dst_ip;
+            auto&             rec = scan_tracker[key];
+
+            const auto now = Clock::now();
 
             if (rec.syns == 0)
             {
-                rec.syns = 1;
+                rec.syns       = 1;
                 rec.first_seen = now;
             }
             else
             {
-                auto elapsed_ms = chrono::duration_cast<chrono::milliseconds>(now - rec.first_seen).count();
+                const auto elapsed_ms =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - rec.first_seen)
+                        .count();
+
                 if (elapsed_ms <= 5000)
-                { // 5 second window
-                    rec.syns++;
+                {
+                    ++rec.syns;
                 }
                 else
                 {
-                    // window expired -> reset
-                    rec.syns = 1;
+                    rec.syns       = 1;
                     rec.first_seen = now;
                 }
             }
 
-            const int SYN_THRESHOLD = 10;
+            constexpr int SYN_THRESHOLD = 10;
             if (rec.syns > SYN_THRESHOLD)
             {
-                emit_alert_json("TCP", "critical",
-                                "TCP SYN flood/scan detected from " + src_ip + " to " + dst_ip +
-                                    " (" + to_string(rec.syns) + " probes)");
+                emit_alert_json(
+                    "TCP",
+                    "critical",
+                    "TCP SYN flood/scan detected from " + src_ip +
+                    " to " + dst_ip + " (" + std::to_string(rec.syns) + " probes)",
+                    host);
                 rec.syns = 0;
             }
             return;
         }
 
+        // --- Whitelist check runs AFTER SYN check. ---
+        if (SAFE_SERVER_PORTS.count(dst_port) != 0U)
+        {
+            return;
+        }
+
+        // Explicit important ports
+        if (dst_port == 22)
+        {
+            emit_alert_json(
+                "TCP",
+                "high",
+                "Potential SSH connection detected to port 22",
+                host);
+            return;
+        }
+
+        if (dst_port == 3389)
+        {
+            emit_alert_json(
+                "TCP",
+                "high",
+                "Potential RDP connection detected to port 3389",
+                host);
+            return;
+        }
+
         if (is_rst)
         {
-            emit_alert_json("TCP", "medium", "RST observed on port " + to_string(dst_port) + " from " + src_ip);
+            emit_alert_json(
+                "TCP",
+                "medium",
+                "RST observed on port " + std::to_string(dst_port) +
+                " from " + src_ip,
+                host);
             return;
         }
     }
-
-    return;
 }

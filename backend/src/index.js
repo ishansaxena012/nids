@@ -11,9 +11,12 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: "1mb" }));
 
-app.get("/health", (req, res) => res.json({ ok: true }));
+// --- CONFIGURATION ---
+// Set the device ID determined in our previous analysis (5 for Qualcomm Wi-Fi)
+// This should ideally come from .env, but since it's missing, we define it here.
+const SENSOR_DEVICE_ID = process.env.SENSOR_DEVICE_ID || '5'; 
 
-// ALERT FUNCTION
+// ALERT FUNCTION (Unchanged - already robust)
 /**
  * Ingests an alert into the database and enqueues notifications.
  * @param {object} alert - The alert object.
@@ -28,13 +31,14 @@ function ingestAlert(alert) {
   }
 
   // Database Insert
-  const stmt = db.prepare(
-    `INSERT INTO alerts (ts, src_ip, dst_ip, proto, rule, rule_id, severity, desc, payload_ref)
-     VALUES (COALESCE(@ts, CURRENT_TIMESTAMP), @src_ip, @dst_ip, @proto, @rule, @rule_id, @severity, @desc, @payload_ref)`
+    const stmt = db.prepare(
+    `INSERT INTO alerts (ts, src_ip, dst_ip, proto, rule, rule_id, severity, desc, payload_ref, host)
+      VALUES (COALESCE(@ts, CURRENT_TIMESTAMP), @src_ip, @dst_ip, @proto, @rule, @rule_id, @severity, @desc, @payload_ref, @host)`
   );
 
+
   const info = stmt.run({
-    ts: alert.timestamp ? new Date(alert.timestamp * 1000).toISOString() : null,
+    ts: alert.time || null,
     src_ip: alert.src_ip,
     dst_ip: alert.dst_ip,
     proto: alert.proto || null,
@@ -43,6 +47,7 @@ function ingestAlert(alert) {
     severity: alert.severity || "medium",
     desc: alert.desc || null,
     payload_ref: alert.payload_ref || null,
+    host: alert.host || null, 
   });
 
   const insertedId = info.lastInsertRowid;
@@ -75,7 +80,9 @@ function ingestAlert(alert) {
   return insertedId;
 }
 
-// ALERTS ENDPOINTS
+// ALERTS ENDPOINTS (Unchanged)
+app.get("/health", (req, res) => res.json({ ok: true }));
+
 app.get("/api/alerts", (req, res) => {
   const rows = db
     .prepare("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 200")
@@ -83,7 +90,7 @@ app.get("/api/alerts", (req, res) => {
   res.json(rows);
 });
 
-//  route uses the new ingestAlert function
+// route uses the new ingestAlert function
 app.post("/api/alerts", (req, res) => {
   try {
     const insertedId = ingestAlert(req.body);
@@ -107,8 +114,7 @@ app.get("/api/notifications/pending", (req, res) => {
   res.json(rows);
 });
 
-//  RULES + AUDIT ROUTES 
-
+// RULES + AUDIT ROUTES (Unchanged)
 function computeDiff(oldObj = {}, newObj = {}) {
   const diffs = [];
   const keys = new Set([
@@ -291,40 +297,58 @@ app.get("/api/rules/:id/audit", (req, res) => {
   res.json(rows);
 });
 
-//  end RULES + AUDIT ROUTES 
+// end RULES + AUDIT ROUTES 
+
 // SENSOR LAUNCHER
-//  Launches the C++ NIDS sensor as a child process
-
+// Launches the C++ NIDS sensor as a child process
 function launchNIDSSensor() {
-  const sensorPath = "../sensor/build/nids_sensor";
+  const sensorPath = "../sensor/build/nids_sensor.exe";
 
-  logger.info({ event: "sensor_spawning", path: sensorPath });
-  
-  const nidsProcess = spawn(sensorPath, ['5']);
+  logger.info({ event: "sensor_spawning", path: sensorPath, device_id: SENSOR_DEVICE_ID });
+
+  // 🔹 The sensor needs the device ID as an argument.
+  const nidsProcess = spawn(sensorPath, [SENSOR_DEVICE_ID], {
+    cwd: process.cwd(),
+    shell: false
+  });
+
+  // buffer for partial lines from stdout
+  let partialSensorOutput = "";
+
   nidsProcess.stdout.on("data", (data) => {
-    const output = data.toString();
-    
-    output.split('\n').filter(Boolean).forEach(line => {
+    partialSensorOutput += data.toString();
+
+    let boundary;
+    while ((boundary = partialSensorOutput.indexOf("\n")) !== -1) {
+      const line = partialSensorOutput.substring(0, boundary).trim();
+      partialSensorOutput = partialSensorOutput.substring(boundary + 1);
+
+      if (!line) continue;
+
       logger.info({ event: "sensor_data", data: line });
       try {
         const alert = JSON.parse(line);
-        ingestAlert(alert); 
+        ingestAlert(alert);
       } catch (err) {
-        logger.error({ event: "sensor_data_parse_error", data: line, error: err.message });
+        logger.error({
+          event: "sensor_data_parse_error",
+          data: line,
+          error: err.message
+        });
       }
-    });
+    }
   });
 
-  // Listen for any errors from the C++ program
   nidsProcess.stderr.on("data", (data) => {
-    logger.error({ event: "sensor_error", error: data.toString() });
+    logger.info({ event: "sensor_stderr", output: data.toString() });
   });
 
   nidsProcess.on("close", (code) => {
     logger.warn({ event: "sensor_exited", code });
-    // setTimeout(launchNIDSSensor, 5000); 
+    // try to relaunch after a short delay
+    setTimeout(launchNIDSSensor, 3000);
   });
-  
+
   nidsProcess.on("error", (err) => {
     logger.error({ event: "sensor_spawn_error", error: err.message });
   });
