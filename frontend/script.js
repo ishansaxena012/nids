@@ -29,13 +29,24 @@ async function fetchJSON(url, opts = {}) {
  * Now supports: critical, high, medium, low, unknown
  */
 function severityClassTokens(sev) {
-  if (!sev) return ["severity", "unknown"];
-  const s = String(sev).toLowerCase();
-  if (s === "critical") return ["severity", "critical"];
+  const s = String(sev || "").toLowerCase().trim();
+
+  if (!s) return ["severity", "unknown"];
+  if (s === "critical" || s === "crit") return ["severity", "critical"];
   if (s === "high") return ["severity", "high"];
-  if (s === "medium") return ["severity", "medium"];
+  if (s === "medium" || s === "med") return ["severity", "medium"];
   if (s === "low") return ["severity", "low"];
+
   return ["severity", "unknown"];
+}
+
+function formatSeverityLabel(sev) {
+  const s = String(sev || "").toLowerCase().trim();
+  if (s === "critical" || s === "crit") return "Critical";
+  if (s === "high") return "High";
+  if (s === "medium" || s === "med") return "Medium";
+  if (s === "low") return "Low";
+  return "Unknown";
 }
 
 const alertsTbody = $("#alerts-tbody") || $("#alerts-table tbody");
@@ -64,14 +75,20 @@ function makeAlertRow(alert) {
   const src = escapeHtml(alert.src_ip ?? alert.src ?? "");
   const dst = escapeHtml(alert.dst_ip ?? alert.dst ?? "");
   const proto = escapeHtml(alert.proto ?? "n/a");
-  const severity = escapeHtml(alert.severity ?? "n/a");
+
+  const severityRaw = alert.severity ?? "unknown";
+  const severityLabel = formatSeverityLabel(severityRaw);
+  const [sevBase, sevLevel] = severityClassTokens(severityRaw);
+
   const desc = escapeHtml(alert.desc ?? alert.description ?? "");
   const host = escapeHtml(alert.host ?? "");
 
-  const [sevBase, sevLevel] = severityClassTokens(severity);
-
   const tr = document.createElement("tr");
   tr.dataset.alertId = String(alert.id ?? "");
+
+  // Optional: severity stripe on the left side of the row
+  tr.classList.add(`sev-${sevLevel}`);
+
   tr.innerHTML = `
     <td class="col-id">
       <input type="checkbox" class="row-select" aria-label="Select alert ${id}" />
@@ -85,7 +102,7 @@ function makeAlertRow(alert) {
     </td>
     <td class="col-proto">${proto}</td>
     <td class="col-sev">
-      <span class="${sevBase} ${sevLevel}">${severity}</span>
+      <span class="badge ${sevBase} ${sevLevel}">${escapeHtml(severityLabel)}</span>
     </td>
     <td class="col-desc wrap">
       ${desc}
@@ -98,6 +115,7 @@ function makeAlertRow(alert) {
   `;
   return tr;
 }
+
 
 function applyTruncationTitles(container) {
   requestAnimationFrame(() => {
@@ -153,7 +171,8 @@ ${alert.host ?? ""}`.toLowerCase();
   }
 
   if (sevFilterVal) {
-    if ((alert.severity ?? "").toLowerCase() !== sevFilterVal) return false;
+    const [, alertSevLevel] = severityClassTokens(alert.severity);
+    if (alertSevLevel !== sevFilterVal) return false;
   }
 
   if (ruleFilterVal) {
@@ -164,6 +183,7 @@ ${alert.host ?? ""}`.toLowerCase();
 
   return true;
 }
+
 
 function renderAlerts() {
   if (!alertsTbody) return;
@@ -468,12 +488,16 @@ function showAlertModal(alertObj) {
     alertObj.ts ||
     alertObj.created_at ||
     "";
-  const severity = alertObj.severity ?? "";
+  const severityRaw = alertObj.severity ?? "";
+  const severityLabel = formatSeverityLabel(severityRaw);
+  const [sevBase, sevLevel] = severityClassTokens(severityRaw);
   const host = alertObj.host ?? "";
+
+  const severityBadge = `<span class="badge ${sevBase} ${sevLevel}">${escapeHtml(severityLabel)}</span>`;
 
   body.innerHTML = `
     <div><strong>ID:</strong> ${escapeHtml(String(alertObj.id ?? ""))}</div>
-    <div><strong>Severity:</strong> ${escapeHtml(String(severity))}</div>
+    <div><strong>Severity:</strong> ${severityBadge}</div>
     <div><strong>Time:</strong> ${escapeHtml(String(time))}</div>
     <div><strong>Src:</strong> ${escapeHtml(alertObj.src_ip ?? alertObj.src ?? "")}</div>
     <div><strong>Dst:</strong> ${escapeHtml(alertObj.dst_ip ?? alertObj.dst ?? "")}</div>

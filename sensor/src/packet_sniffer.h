@@ -1,8 +1,11 @@
 #ifndef PACKET_SNIFFER_H
 #define PACKET_SNIFFER_H
-
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <pcap.h>
-#include <fstream>  // Required for std::ofstream
+
+#include <fstream> 
 #include <string>
 
 class PacketSniffer {

@@ -1,6 +1,6 @@
-/* ============================================
+/* 
    NIDS Dashboard - Custom Styling
-   ============================================ */
+    */
 
 :root {
   --color-bg-primary: #222831;
@@ -41,9 +41,9 @@
   --transition-smooth: 250ms ease;
 }
 
-/* ============================================
+/* 
    RESET & BASE
-   ============================================ */
+    */
 
 * {
   margin: 0;
@@ -90,9 +90,66 @@ input, select, textarea {
   color: inherit;
 }
 
-/* ============================================
+
+/* Base pill dot (used in legend) */
+.pill {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+/* Badge used inside the Severity column */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Severity colors – works for both .pill and .badge */
+.severity.critical {
+  background-color: #ff3b30; /* bright red */
+  color: #050505;
+}
+
+.severity.high {
+  background-color: #ff9500; /* orange */
+  color: #050505;
+}
+
+.severity.medium {
+  background-color: #eeff00e0; /* yellow */
+  color: #050505;
+}
+
+.severity.low {
+  background-color: #5ac8fa; /* blue */
+  color: #050505;
+}
+
+/* Optional: info / debug */
+.severity.info {
+  background-color: #8e8e93;
+  color: #ffffff;
+}
+
+/* Optional: give each alert row a severity stripe on the left */
+tr.sev-critical  { border-left: 4px solid #ff3b30; }
+tr.sev-high      { border-left: 4px solid #ff9500; }
+tr.sev-medium    { border-left: 4px solid #ffd60a; }
+tr.sev-low       { border-left: 4px solid #5ac8fa; }
+tr.sev-info      { border-left: 4px solid #8e8e93; }
+
+
+
+
+/* 
    UTILITY CLASSES
-   ============================================ */
+    */
 
 .visually-hidden {
   position: absolute;
@@ -123,9 +180,9 @@ input, select, textarea {
   word-break: break-word;
 }
 
-/* ============================================
+/* 
    HEADER
-   ============================================ */
+    */
 
 .header {
   background: var(--color-bg-secondary);
@@ -223,9 +280,9 @@ input, select, textarea {
   color: red;
 }
 
-/* ============================================
+/* 
    BUTTONS
-   ============================================ */
+    */
 
 .btn {
   padding: var(--space-sm) var(--space-md);
@@ -267,9 +324,9 @@ input, select, textarea {
   font-size: 0.813rem;
 }
 
-/* ============================================
+/* 
    MAIN LAYOUT
-   ============================================ */
+    */
 
 .main-wrap {
   flex: 1;
@@ -279,9 +336,9 @@ input, select, textarea {
   width: 100%;
 }
 
-/* ============================================
+/* 
    CONTROLS SECTION
-   ============================================ */
+    */
 
 .controls-section {
   background: var(--color-bg-secondary);
@@ -358,9 +415,9 @@ input, select, textarea {
   font-weight: 500;
 }
 
-/* ============================================
+/* 
    GRID LAYOUT
-   ============================================ */
+    */
 
 .grid {
   display: grid;
@@ -369,9 +426,9 @@ input, select, textarea {
   align-items: start;
 }
 
-/* ============================================
+/* 
    CARD
-   ============================================ */
+    */
 
 .card {
   background: var(--color-bg-secondary);
@@ -402,9 +459,9 @@ input, select, textarea {
   gap: var(--space-sm);
 }
 
-/* ============================================
+/* 
    TABLES
-   ============================================ */
+    */
 
 .table-wrapper {
   overflow-x: auto;
@@ -497,9 +554,9 @@ input, select, textarea {
   font-weight: 500;
 }
 
-/* ============================================
+/* 
    SEVERITY PILLS
-   ============================================ */
+    */
 
 .pill {
   display: inline-block;
@@ -532,9 +589,9 @@ input, select, textarea {
   color: var(--color-low);
 }
 
-/* ============================================
+/* 
    TABLE FOOTER
-   ============================================ */
+    */
 
 .table-footer {
   display: flex;
@@ -591,9 +648,9 @@ input, select, textarea {
   gap: var(--space-xs);
 }
 
-/* ============================================
+/* 
    SIDEBAR
-   ============================================ */
+    */
 
 .sidebar {
   position: sticky;
@@ -626,9 +683,9 @@ input, select, textarea {
   font-style: italic;
 }
 
-/* ============================================
+/* 
    FOOTER
-   ============================================ */
+    */
 
 footer {
   background: var(--color-bg-secondary);
@@ -647,9 +704,9 @@ footer {
   flex-wrap: wrap;
 }
 
-/* ============================================
+/* 
    MODAL
-   ============================================ */
+    */
 
 .modal-backdrop {
   position: fixed;
@@ -738,9 +795,9 @@ footer {
   border-top: 1px solid var(--color-border);
 }
 
-/* ============================================
+/* 
    FORM ELEMENTS
-   ============================================ */
+    */
 
 .form-label {
   display: block;
@@ -787,9 +844,9 @@ footer {
   accent-color: var(--color-accent);
 }
 
-/* ============================================
+/* 
    RESPONSIVE DESIGN
-   ============================================ */
+    */
 
 @media (max-width: 1200px) {
   .grid {

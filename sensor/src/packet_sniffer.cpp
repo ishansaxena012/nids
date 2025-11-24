@@ -1,5 +1,7 @@
 #include "packet_sniffer.h"
 #define _WIN32_WINNT 0x0600
+#define WIN32_LEAN_AND_MEAN
+#define _WINSOCK_DEPRECATED_NO_WARNING
 
 #include <pcap.h>
 #include <winsock2.h>
@@ -15,6 +17,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <iomanip>
+#include <windows.h>
+
 // MUTEX INCLUDE REMOVED
 
 #ifndef TH_SYN
@@ -468,9 +472,7 @@ void PacketSniffer::process_packet_with_len(const u_char* packet_data,
         }
     };
 
-    // -------------------------------------------------------------------------
     // ICMP handling (protocol 1)
-    // -------------------------------------------------------------------------
     if (proto == 1)
     {
         static std::unordered_map<std::string, int> icmp_count;
@@ -500,17 +502,13 @@ void PacketSniffer::process_packet_with_len(const u_char* packet_data,
         return;
     }
 
-    // -------------------------------------------------------------------------
     // UDP handling (protocol 17)
-    // -------------------------------------------------------------------------
     if (proto == 17)
     {
         return;
     }
 
-    // -------------------------------------------------------------------------
     // TCP handling (protocol 6)
-    // -------------------------------------------------------------------------
     if (proto == 6)
     {
         const std::size_t tcp_off = eth_hdr_len + ip_header_len;
@@ -630,3 +628,4 @@ void PacketSniffer::process_packet_with_len(const u_char* packet_data,
         }
     }
 }
+
