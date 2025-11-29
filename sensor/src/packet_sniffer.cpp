@@ -1,5 +1,10 @@
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00  // Windows 10
+#endif
+
+#define WIN32_LEAN_AND_MEAN
+
 #include "packet_sniffer.h"
-#define _WIN32_WINNT 0x0600
 
 #include <pcap.h>
 #include <winsock2.h>
@@ -272,7 +277,7 @@ PacketSniffer::PacketSniffer(int device_num)
     // Apply a BPF filter to reduce captured traffic (IP + TCP/ICMP only)
     {
         struct bpf_program fp;
-        if (pcap_compile(handle_, &fp, "ip and (tcp or icmp)", 1, PCAP_NETMASK_UNKNOWN) == 0)
+        if (pcap_compile(handle_, &fp, "(ip or ip6) and (tcp or icmp or icmp6)", 1, PCAP_NETMASK_UNKNOWN) == 0)
         {
             if (pcap_setfilter(handle_, &fp) != 0)
             {

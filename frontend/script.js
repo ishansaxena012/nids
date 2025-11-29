@@ -1,5 +1,5 @@
 const API_BASE = "http://localhost:3000";
-const REFRESH_INTERVAL_MS = 10000;
+const REFRESH_INTERVAL_MS = 2000;
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
