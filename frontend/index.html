@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SentinelWatch</title>
 
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="style.css" />
+
 </head>
 <body>
   <header class="header" role="banner">
@@ -26,22 +28,25 @@
           Last update: <time id="last-update-time">—</time>
         </div>
 
+        <!-- NEW: auto-refresh status + control -->
+        <div class="status small" aria-live="polite" id="refresh-status">Auto-refreshing…</div>
+        <button id="pause-refresh" class="btn small" type="button">Pause</button>
+
         <div class="control-row">
           <label class="live-toggle" for="live-toggle">
-            <!-- <input id="live-toggle" type="checkbox" aria-checked="false" /> -->
             <span>•</span>
             <span class="live-label">LIVE</span>
           </label>
-
-          <!-- <button id="import-btn" class="btn small" type="button" title="Import alerts or rules" aria-label="Import rules or alerts">Import</button> -->
-          <!-- <button id="export-btn" class="btn small" type="button" title="Export current view" aria-label="Export CSV">Export</button> -->
-          <!-- <button id="settings-btn" class="btn small" type="button" title="Settings" aria-label="Settings">Settings</button> -->
         </div>
       </div>
     </div>
   </header>
 
   <main id="main" role="main" class="main-wrap">
+
+    <!-- NEW: Error banner -->
+    <!-- <div id="error-banner" class="error-banner small" aria-live="polite" hidden></div> -->
+
     <!-- Controls row -->
     <section class="controls-section" aria-label="Controls">
       <div class="controls-inner">
@@ -69,8 +74,6 @@
           <select id="rule-filter" aria-label="Filter by rule">
             <option value="">All rules</option>
           </select>
-
-          <!-- <button id="clear-filters" class="btn" type="button">Clear</button> -->
         </div>
 
         <div class="meta-actions">
@@ -91,6 +94,9 @@
           </div>
         </div>
 
+        <!-- NEW: summary row -->
+        <div id="severity-summary" class="severity-summary-row small muted"></div>
+
         <div
           class="table-wrapper"
           id="alerts-table-wrapper"
@@ -107,11 +113,11 @@
                 <th scope="col" class="col-id">
                   <input type="checkbox" id="select-all" aria-label="Select all alerts" />
                 </th>
-                <th scope="col" class="col-id">ID</th>
+                <th scope="col" class="col-id sortable" data-sort="id">ID</th>
                 <th scope="col" class="col-src">Source</th>
                 <th scope="col" class="col-dst">Destination</th>
                 <th scope="col" class="col-proto">Proto</th>
-                <th scope="col" class="col-sev">Severity</th>
+                <th scope="col" class="col-sev sortable" data-sort="severity">Severity</th>
                 <th scope="col" class="col-desc wrap">Description / Host</th>
                 <th scope="col" class="col-actions">Actions</th>
               </tr>
@@ -135,10 +141,7 @@
       <aside class="sidebar card" aria-labelledby="rules-heading">
         <div class="card-header">
           <h2 id="rules-heading">Rules</h2>
-          <div class="card-actions">
-            <!-- <button id="new-rule" class="btn" type="button" aria-label="Create new rule">New</button>
-            <button id="import-rules" class="btn" type="button" aria-label="Import rules">Import</button> -->
-          </div>
+          <div class="card-actions"></div>
         </div>
 
         <div
@@ -170,8 +173,7 @@
           role="status"
           aria-live="polite"
           style="max-height:180px; overflow:auto; padding-right:6px;"
-        >
-        </div>
+        ></div>
 
         <h3 class="sidebar-heading">Audit Logs</h3>
         <div
@@ -180,8 +182,7 @@
           role="log"
           aria-live="polite"
           style="max-height:180px; overflow:auto; padding-right:6px;"
-        >
-        </div>
+        ></div>
       </aside>
     </div>
   </main>
@@ -195,8 +196,6 @@
         id="docs-link"
         class="muted"
       >Docs</a>
-      <!-- <span>•</span> -->
-      <!-- <a href="#" id="support-link" class="muted">Support</a> -->
     </div>
   </footer>
 
@@ -213,8 +212,7 @@
         <h3 id="modal-title">Alert details</h3>
         <button class="modal-close" id="modal-close" aria-label="Close dialog">&times;</button>
       </header>
-      <div class="modal-body" id="modal-body">
-      </div>
+      <div class="modal-body" id="modal-body"></div>
       <footer class="modal-footer">
         <button id="modal-ack" class="btn" type="button">Acknowledge</button>
         <button id="modal-close-2" class="btn" type="button">Close</button>
@@ -222,7 +220,7 @@
     </div>
   </div>
 
-  <!-- Rule edit modal -->
+  <!-- Rule Edit Modal -->
   <div
     id="rule-modal-backdrop"
     class="modal-backdrop"
@@ -239,6 +237,7 @@
         <div id="rule-form-desc" class="visually-hidden">
           Edit rule name, pattern and enabled state
         </div>
+
         <label for="rule-id" class="visually-hidden">Rule ID</label>
         <input id="rule-id" name="id" type="text" readonly class="form-field" />
 
@@ -253,6 +252,7 @@
           Enabled
         </label>
       </form>
+
       <footer class="modal-footer">
         <button id="rule-save" class="btn primary" type="button">Save</button>
         <button id="rule-cancel" class="btn" type="button">Cancel</button>

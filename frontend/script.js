@@ -13,20 +13,38 @@ function escapeHtml(s = "") {
     .replace(/'/g, "&#39;");
 }
 
+/*
+  Error handling + fetch helper
+*/
+const errorBanner = $("#error-banner");
+
+function showError(msg) {
+  if (!errorBanner) return;
+  errorBanner.textContent = msg;
+  errorBanner.hidden = false;
+}
+
+function clearError() {
+  if (!errorBanner) return;
+  errorBanner.hidden = true;
+}
+
 async function fetchJSON(url, opts = {}) {
   try {
     const res = await fetch(url, opts);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    clearError();
     return await res.json();
   } catch (err) {
     console.error(`fetchJSON error for ${url}:`, err);
+    showError("Backend not reachable or returned an error.");
     return null;
   }
 }
 
 /**
  * Map severity -> CSS tokens
- * Now supports: critical, high, medium, low, unknown
+ * Supports: critical, high, medium, low, unknown
  */
 function severityClassTokens(sev) {
   if (!sev) return ["severity", "unknown"];
@@ -38,11 +56,17 @@ function severityClassTokens(sev) {
   return ["severity", "unknown"];
 }
 
+/*
+  DOM references
+*/
 const alertsTbody = $("#alerts-tbody") || $("#alerts-table tbody");
 const rulesTbody = $("#rules-tbody") || $("#rules-table tbody");
 const notificationsEl = $("#notifications");
 const auditEl = $("#audit-logs");
 const lastUpdateTimeEl = $("#last-update-time");
+const refreshStatusEl = $("#refresh-status");
+const pauseRefreshBtn = $("#pause-refresh");
+const severitySummaryEl = $("#severity-summary");
 
 const selectAllCheckbox = $("#select-all");
 const bulkAckBtn = $("#bulk-ack");
@@ -53,8 +77,16 @@ const severityFilter = $("#severity-filter");
 const ruleFilter = $("#rule-filter");
 const resultCountEl = $("#result-count");
 
+/*
+  State
+*/
 let currentAlerts = [];
 let currentRules = [];
+
+let autoRefresh = true;
+let refreshTimer = null;
+
+let sortState = { field: "id", dir: "desc" };
 
 /**
  * Build one alert row, including host (site) under description.
@@ -128,57 +160,10 @@ async function loadAlerts() {
   }
   currentAlerts = data;
 
+  updateSeveritySummary();
   renderAlerts();
   updateResultCount();
   updateLastUpdateTime();
-}
-
-/**
- * Match alert against current search + filters.
- * Now also searches in alert.host.
- */
-function matchesFilters(alert) {
-  const q = (searchInput?.value || "").toLowerCase().trim();
-  const sevFilterVal = (severityFilter?.value || "").toLowerCase();
-  const ruleFilterVal = (ruleFilter?.value || "").toLowerCase();
-
-  if (q) {
-    const hay = `${alert.src_ip ?? alert.src ?? ""} \
-${alert.dst_ip ?? alert.dst ?? ""} \
-${alert.desc ?? alert.description ?? ""} \
-${alert.proto ?? ""} \
-${alert.id ?? ""} \
-${alert.host ?? ""}`.toLowerCase();
-    if (!hay.includes(q)) return false;
-  }
-
-  if (sevFilterVal) {
-    if ((alert.severity ?? "").toLowerCase() !== sevFilterVal) return false;
-  }
-
-  if (ruleFilterVal) {
-    const ruleName = (alert.rule_name ?? alert.rule ?? "").toString().toLowerCase();
-    const ruleId = (alert.rule_id ?? "").toString().toLowerCase();
-    if (!ruleName.includes(ruleFilterVal) && !ruleId.includes(ruleFilterVal)) return false;
-  }
-
-  return true;
-}
-
-function renderAlerts() {
-  if (!alertsTbody) return;
-
-  const visible = currentAlerts.filter(matchesFilters);
-  alertsTbody.innerHTML = "";
-
-  const frag = document.createDocumentFragment();
-  for (const a of visible) {
-    frag.appendChild(makeAlertRow(a));
-  }
-  alertsTbody.appendChild(frag);
-
-  applyTruncationTitles(alertsTbody);
-  updateSelectAllState();
 }
 
 async function loadRules() {
@@ -262,8 +247,100 @@ async function loadAudit() {
 }
 
 /*
+   Filtering & summary
+*/
+function matchesFilters(alert) {
+  const q = (searchInput?.value || "").toLowerCase().trim();
+  const sevFilterVal = (severityFilter?.value || "").toLowerCase();
+  const ruleFilterVal = (ruleFilter?.value || "").toLowerCase();
+
+  if (q) {
+    const hay = `${alert.src_ip ?? alert.src ?? ""} \
+${alert.dst_ip ?? alert.dst ?? ""} \
+${alert.desc ?? alert.description ?? ""} \
+${alert.proto ?? ""} \
+${alert.id ?? ""} \
+${alert.host ?? ""}`.toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+
+  if (sevFilterVal) {
+    if ((alert.severity ?? "").toLowerCase() !== sevFilterVal) return false;
+  }
+
+  if (ruleFilterVal) {
+    const ruleName = (alert.rule_name ?? alert.rule ?? "").toString().toLowerCase();
+    const ruleId = (alert.rule_id ?? "").toString().toLowerCase();
+    if (!ruleName.includes(ruleFilterVal) && !ruleId.includes(ruleFilterVal)) return false;
+  }
+
+  return true;
+}
+
+function updateSeveritySummary() {
+  if (!severitySummaryEl) return;
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, unknown: 0 };
+
+  currentAlerts.forEach(a => {
+    const s = (a.severity || "unknown").toLowerCase();
+    if (counts[s] === undefined) counts.unknown++;
+    else counts[s]++;
+  });
+
+  severitySummaryEl.innerHTML = `
+    <span class="summary-pill critical">Critical: ${counts.critical}</span>
+    <span class="summary-pill high">High: ${counts.high}</span>
+    <span class="summary-pill medium">Med: ${counts.medium}</span>
+    <span class="summary-pill low">Low: ${counts.low}</span>
+    <span class="summary-pill unknown">Other: ${counts.unknown}</span>
+  `;
+}
+
+/*
+   Sorting & rendering
+*/
+function compareAlerts(a, b) {
+  const { field, dir } = sortState;
+  let va, vb;
+
+  switch (field) {
+    case "severity": {
+      const order = ["critical", "high", "medium", "low", "unknown"];
+      const sa = (a.severity || "unknown").toLowerCase();
+      const sb = (b.severity || "unknown").toLowerCase();
+      va = order.indexOf(sa);
+      vb = order.indexOf(sb);
+      break;
+    }
+    case "id":
+    default:
+      va = Number(a.id) || 0;
+      vb = Number(b.id) || 0;
+  }
+
+  const diff = va - vb;
+  return dir === "asc" ? diff : -diff;
+}
+
+function renderAlerts() {
+  if (!alertsTbody) return;
+
+  const visible = currentAlerts.filter(matchesFilters).sort(compareAlerts);
+  alertsTbody.innerHTML = "";
+
+  const frag = document.createDocumentFragment();
+  for (const a of visible) {
+    frag.appendChild(makeAlertRow(a));
+  }
+  alertsTbody.appendChild(frag);
+
+  applyTruncationTitles(alertsTbody);
+  updateSelectAllState();
+}
+
+/*
    Controls & interactions
- */
+*/
 function updateResultCount() {
   if (!resultCountEl) return;
   const visibleCount = currentAlerts.filter(matchesFilters).length;
@@ -323,7 +400,7 @@ async function bulkAcknowledgeSelected() {
 }
 
 /**
- * CSV export — now also includes host column
+ * CSV export — includes host column
  */
 function exportSelectedCSV() {
   if (!alertsTbody) return;
@@ -343,7 +420,6 @@ function exportSelectedCSV() {
       const sev = tr.querySelector(".col-sev")?.textContent?.trim() ?? "";
       const desc = tr.querySelector(".col-desc")?.textContent?.trim() ?? "";
 
-      // Look up corresponding alert object to get host
       const alertObj = currentAlerts.find(a => String(a.id) === String(id));
       const host = alertObj?.host ?? "";
 
@@ -454,7 +530,6 @@ async function ackSingle(id) {
 
 /**
  * Show alert modal.
- * Now also shows severity, time, and host (site).
  */
 function showAlertModal(alertObj) {
   const backdrop = $("#modal-backdrop");
@@ -491,11 +566,16 @@ function showAlertModal(alertObj) {
   const close = $("#modal-close");
   const close2 = $("#modal-close-2");
   const ackBtn = $("#modal-ack");
+  const previouslyFocused = document.activeElement;
+
+  ackBtn?.focus();
+
   function cleanup() {
     backdrop.setAttribute("aria-hidden", "true");
     close?.removeEventListener("click", cleanup);
     close2?.removeEventListener("click", cleanup);
     ackBtn?.removeEventListener("click", onAck);
+    previouslyFocused?.focus();
   }
   function onAck() {
     ackSingle(alertObj.id);
@@ -504,6 +584,30 @@ function showAlertModal(alertObj) {
   close?.addEventListener("click", cleanup);
   close2?.addEventListener("click", cleanup);
   ackBtn?.addEventListener("click", onAck);
+}
+
+/*
+   Auto-refresh controls
+*/
+function setRefreshState(enabled) {
+  autoRefresh = enabled;
+  if (refreshStatusEl) {
+    refreshStatusEl.textContent = enabled ? "Auto-refreshing…" : "Paused";
+  }
+  if (!enabled && refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  } else if (enabled && !refreshTimer) {
+    scheduleRefresh();
+  }
+}
+
+function scheduleRefresh() {
+  if (!autoRefresh) return;
+  refreshTimer = setTimeout(async () => {
+    await loadAll();
+    scheduleRefresh();
+  }, REFRESH_INTERVAL_MS);
 }
 
 /*
@@ -543,6 +647,26 @@ function wireUp() {
     updateResultCount();
   });
 
+  // sortable headers
+  $$("#alerts-table thead th.sortable").forEach(th => {
+    th.addEventListener("click", () => {
+      const field = th.dataset.sort;
+      if (!field) return;
+      if (sortState.field === field) {
+        sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+      } else {
+        sortState = { field, dir: "asc" };
+      }
+      renderAlerts();
+      updateResultCount();
+    });
+  });
+
+  pauseRefreshBtn?.addEventListener("click", () => {
+    setRefreshState(!autoRefresh);
+    pauseRefreshBtn.textContent = autoRefresh ? "Pause" : "Resume";
+  });
+
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       $("#modal-backdrop")?.setAttribute("aria-hidden", "true");
@@ -575,5 +699,5 @@ async function loadAll() {
 document.addEventListener("DOMContentLoaded", () => {
   wireUp();
   loadAll();
-  setInterval(loadAll, REFRESH_INTERVAL_MS);
+  scheduleRefresh();
 });
