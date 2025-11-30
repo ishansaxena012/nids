@@ -61,7 +61,7 @@ function ingestAlert(alert) {
 
   // Notification Logic
   const sev = (alert.severity || "medium").toLowerCase();
-  if (sev === "high" || sev === "critical") {
+  if (["low","medium","high","critical"].includes(sev)) {
     const payload = {
       alert_id: insertedId,
       src_ip: alert.src_ip,
