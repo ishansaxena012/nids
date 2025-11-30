@@ -1,22 +1,6 @@
 /* 
-   NIDS Dashboard - Main Stylesheet
-   Color Palette:
-   - Primary Dark: #070F2B
-   - Secondary: #1B1A55
-   - Accent: #535C91
-   - Light: #9290C3
+   NIDS Dashboard - Custom Styling
     */
-
-/* 
-   CSS Reset & Base Styles
-    */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
 
 :root {
   /* Color System */
@@ -59,12 +43,18 @@
   --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.5);
   
   /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  --transition-quick: 150ms ease;
+  --transition-smooth: 250ms ease;
+}
+
+/* 
+   RESET & BASE
+    */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 html {
@@ -104,9 +94,67 @@ h3 { font-size: 1.125rem; }
   font-size: 0.875rem;
 }
 
+
+/* Base pill dot (used in legend) */
+.pill {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+/* Badge used inside the Severity column */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Severity colors – works for both .pill and .badge */
+.severity.critical {
+  background-color: #ff3b30; /* bright red */
+  color: #050505;
+}
+
+.severity.high {
+  background-color: #ff9500; /* orange */
+  color: #050505;
+}
+
+.severity.medium {
+  background-color: #eeff00e0; /* yellow */
+  color: #050505;
+}
+
+.severity.low {
+  background-color: #5ac8fa; /* blue */
+  color: #050505;
+}
+
+/* Optional: info / debug */
+.severity.info {
+  background-color: #8e8e93;
+  color: #ffffff;
+}
+
+/* Optional: give each alert row a severity stripe on the left */
+tr.sev-critical  { border-left: 4px solid #ff3b30; }
+tr.sev-high      { border-left: 4px solid #ff9500; }
+tr.sev-medium    { border-left: 4px solid #ffd60a; }
+tr.sev-low       { border-left: 4px solid #5ac8fa; }
+tr.sev-info      { border-left: 4px solid #8e8e93; }
+
+
+
+
 /* 
-   Utility Classes
+   UTILITY CLASSES
     */
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -125,8 +173,9 @@ h3 { font-size: 1.125rem; }
 }
 
 /* 
-   Header
+   HEADER
     */
+
 .header {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -214,11 +263,43 @@ h3 { font-size: 1.125rem; }
   animation: pulse 2s ease-in-out infinite;
 }
 
-.live-label {
-  color: #c52222;
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
+/* 
+   BUTTONS
+    */
+
+.btn {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all var(--transition-quick);
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-bg-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn.primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-bg-primary);
+}
+
+.btn.primary:hover {
+  background: #5f9296;
+  border-color: #5f9296;
 }
 
 @keyframes pulse {
@@ -227,8 +308,9 @@ h3 { font-size: 1.125rem; }
 }
 
 /* 
-   Main Layout
+   MAIN LAYOUT
     */
+
 .main-wrap {
   flex: 1;
   padding: var(--space-lg);
@@ -237,12 +319,9 @@ h3 { font-size: 1.125rem; }
   width: 100%;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: var(--space-lg);
-  margin-top: var(--space-lg);
-}
+/* 
+   CONTROLS SECTION
+    */
 
 /* 
    Error Banner
@@ -298,14 +377,29 @@ h3 { font-size: 1.125rem; }
 }
 
 .meta-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
+  margin-left: auto;
+}
+
+#result-count {
+  color: var(--color-text-muted);
+  font-weight: 500;
 }
 
 /* 
-   Cards
+   GRID LAYOUT
     */
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+/* 
+   CARD
+    */
+
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -334,38 +428,8 @@ h3 { font-size: 1.125rem; }
 }
 
 /* 
-   Severity Summary
+   TABLES
     */
-.severity-summary-row {
-  display: flex;
-  gap: var(--space-sm);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--color-primary);
-  border-bottom: 1px solid var(--color-border);
-  flex-wrap: wrap;
-}
-
-.summary-pill {
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 0.8rem;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.summary-pill.critical {
-  background: rgba(220, 38, 38, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(220, 38, 38, 0.4);
-}
-
-.summary-pill.high {
-  background: rgba(249, 115, 22, 0.2);
-  color: #fdba74;
-  border: 1px solid rgba(249, 115, 22, 0.4);
-}
 
 .summary-pill.medium {
   background: rgba(234, 179, 8, 0.2);
@@ -517,17 +581,8 @@ h3 { font-size: 1.125rem; }
 }
 
 /* 
-   Host Cell
+   SEVERITY PILLS
     */
-.host-cell {
-  margin-top: var(--space-xs);
-  padding: var(--space-xs) 0;
-  color: var(--color-text-dim);
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
 
 .host-cell::before {
   content: "🌐";
@@ -569,9 +624,19 @@ h3 { font-size: 1.125rem; }
   font-size: 0.8rem;
 }
 
-.btn.primary {
-  background: var(--color-secondary);
-  border-color: var(--color-accent);
+/* 
+   TABLE FOOTER
+    */
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  flex-wrap: wrap;
+  gap: var(--space-md);
 }
 
 .btn.primary:hover {
@@ -645,8 +710,9 @@ input[type="checkbox"] {
 }
 
 /* 
-   Sidebar
+   SIDEBAR
     */
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -676,12 +742,9 @@ input[type="checkbox"] {
   font-size: 0.85rem;
 }
 
-.notify-item strong,
-.audit-item strong {
-  color: var(--color-light);
-  display: block;
-  margin-bottom: var(--space-xs);
-}
+/* 
+   FOOTER
+    */
 
 /* 
    Table Footer
@@ -703,18 +766,9 @@ input[type="checkbox"] {
   align-items: center;
 }
 
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.pill {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  display: inline-block;
-}
+/* 
+   MODAL
+    */
 
 /* 
    Modals
@@ -803,10 +857,17 @@ input[type="checkbox"] {
   line-height: 1.6;
 }
 
-.modal-body strong {
-  color: var(--color-light);
-  display: inline-block;
-  min-width: 100px;
+/* 
+   FORM ELEMENTS
+    */
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xs);
+  margin-top: var(--space-md);
 }
 
 .modal-body pre {
@@ -853,10 +914,9 @@ footer a {
   transition: color var(--transition-fast);
 }
 
-footer a:hover {
-  color: var(--color-light);
-  text-decoration: underline;
-}
+/* 
+   RESPONSIVE DESIGN
+    */
 
 /* 
    Responsive Design
