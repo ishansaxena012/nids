@@ -21,7 +21,7 @@ This project uses a **hybrid architecture** that integrates a **high-performance
 
 ## ✨ Key Features and Stability ⭐️
 
-### 🧠 High-Performance C++ Sensor (Optimized)
+### High-Performance C++ Sensor (Optimized)
 
 The sensor is now optimized for stability and reliability under network load.
 
@@ -30,18 +30,18 @@ The sensor is now optimized for stability and reliability under network load.
   * **Performance Fixes (Critical):** Utilizes **persistent logging streams** and **explicit Winsock initialization** to prevent disk I/O bottlenecks and runtime failures.
   * **Packet Filtering (New):** Applies a **BPF filter** (IP, TCP, ICMP only) at the kernel level to minimize data transfer overhead.
 
-### ⚖️ Smart Detection Engine
+###  Smart Detection Engine
 
 The rule logic has been structurally corrected to ensure comprehensive threat coverage.
 
 | Threat Type | Logic Status | Severity |
 | :--- | :--- | :--- |
-| 🏓 **ICMP Scan** | **Functional** (Threshold \> 3 pings/5s) | Medium |
-| 🔒 **Sensitive Ports** | **Functional** (SSH 22, RDP 3389) | High |
-| 🚧 **TCP SYN Scans** | **Fixed & Functional.** Detection runs **before** whitelisting to correctly catch scans targeting ports 80/443. | Critical |
-| 🌐 **Whitelisting** | Ignores *non-scan* web traffic (80/443) to reduce noise. | — |
+|  **ICMP Scan** | **Functional** (Threshold \> 3 pings/5s) | Medium |
+|  **Sensitive Ports** | **Functional** (SSH 22, RDP 3389) | High |
+|  **TCP SYN Scans** | **Fixed & Functional.** Detection runs **before** whitelisting to correctly catch scans targeting ports 80/443. | Critical |
+|  **Whitelisting** | Ignores *non-scan* web traffic (80/443) to reduce noise. | — |
 
-### 🧩 Full-Stack Architecture
+###  Full-Stack Architecture
 
   * **Backend (Node.js/Express):** Provides a REST API, manages database connections, and uses **stream buffering** to reliably parse real-time JSON alerts from the C++ sensor.
   * **Database (SQLite):** Uses **WAL mode** for high concurrency, storing all structured alerts and logs.
@@ -49,7 +49,7 @@ The rule logic has been structurally corrected to ensure comprehensive threat co
 
 -----
 
-## 🏗️ Data Architecture & Pipeline
+##  Data Architecture & Pipeline
 
 The project relies on clean Inter-Process Communication (IPC) for stability:
 
@@ -105,8 +105,7 @@ scripts/start.bat
   * Frontend Dashboard runs on **`http://localhost:3001`**
 
 -----
-
-## ▶️ Testing & Verification
+##  Testing & Verification
 
 1.  **View the Dashboard:** Open your browser and visit the Frontend link.
 
@@ -120,7 +119,7 @@ scripts/start.bat
 
 -----
 
-## 🧽 Utility Scripts
+##  Utility Scripts
 
 | Script | Purpose |
 | :--- | :--- |
@@ -136,4 +135,5 @@ scripts/start.bat
 📭 *[06ishansaxena@gmail.com](mailto:06ishansaxena@gmail.com)*
 
 📝 *[linkedin](https://www.linkedin.com/in/ishan-saxena-62781428b/)*
+
 
